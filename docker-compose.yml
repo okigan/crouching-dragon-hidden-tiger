@@ -1,11 +1,14 @@
-# Reproducible security lab: real NVIDIA OpenShell gateway + orchestrator.
+# Reproducible security lab — the whole real loop in Docker.
 #
-#   docker compose up openshell-gateway     # real OpenShell sandbox runtime
-#   docker compose up orchestrator          # the loop (needs backends via .env)
+#   cp .env.example .env   # fill in HiddenLayer creds + cloud vLLM endpoint
+#   docker compose up -d openshell-gateway         # real OpenShell runtime
+#   docker compose run --rm orchestrator           # generate → screen → harden
 #
 # The gateway enforces policy at the kernel level (seccomp / Landlock / network
-# namespaces). HiddenLayer + vLLM are selected/credentialed via .env
-# (see .env.example). Mock backends are for the test suite, not deployment.
+# namespaces). The orchestrator (our code) generates bypass prompts on the cloud
+# vLLM, screens them through live HiddenLayer, hardens the OpenShell policy, and
+# writes the report — all backends via .env. vLLM is cloud-hosted (macOS can't
+# run it locally). Mock backends are for the test suite, not deployment.
 
 services:
   # One-shot: generate the sandbox-JWT signing keys the gateway needs.
@@ -59,43 +62,21 @@ services:
       - "host.openshell.internal:host-gateway"
     restart: unless-stopped
 
-  # The security-improvement loop. Talks to the gateway (real OpenShell), and to
-  # HiddenLayer + vLLM per .env. Mocks are test-only; a deployment sets real
-  # backends. Requires the OpenShell adapter wiring (in progress).
+  # Our code — the security-improvement loop, containerized. Generates bypass
+  # prompts on the cloud vLLM, screens them through live HiddenLayer, hardens the
+  # OpenShell policy on the real gateway, iterates, and writes the report.
+  # All backends + credentials come from .env (LLM=nemotron on the cloud vLLM,
+  # ASSESSOR=hiddenlayer, SANDBOX=openshell). vLLM is hosted in the cloud — macOS
+  # can't run it locally — so there is no local vllm service.
   orchestrator:
     build: .
     depends_on:
       - openshell-gateway
     env_file:
       - path: .env
-        required: false
-    environment:
-      SANDBOX: openshell
-      OPENSHELL_GATEWAY_ENDPOINT: http://host.docker.internal:8080
-      OPENSHELL_GATEWAY_INSECURE: "true"
-      # ASSESSOR=hiddenlayer / LLM=nemotron + credentials come from .env
+        required: true
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
       - ./runs:/app/runs
       - ./policies:/app/policies
-
-  # Optional: self-host Nemotron on vLLM (GPU). Opt-in profile. For dev we point
-  # NEMOTRON_BASE_URL at an existing endpoint via .env instead.
-  vllm:
-    image: vllm/vllm-openai:latest
-    profiles: ["gpu"]
-    command: >
-      --model nvidia/Nemotron-4-340B-Instruct
-      --served-model-name nemotron
-    ports:
-      - "8000:8000"
-    environment:
-      - HUGGING_FACE_HUB_TOKEN=${HF_TOKEN:-}
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu]
