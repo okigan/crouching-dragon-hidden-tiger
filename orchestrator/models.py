@@ -1,0 +1,220 @@
+"""Core domain data model for the AI Security Validation Platform.
+
+Pure data + small pure helpers. No I/O, no backend imports — this module is the
+shared vocabulary every component (mock or real) speaks. See docs/DESIGN.md §2.
+"""
+
+from __future__ import annotations
+
+import copy
+from dataclasses import dataclass, field, replace
+from enum import IntEnum
+from typing import Any
+
+
+class Severity(IntEnum):
+    """Ordered so severities compare and sort naturally (critical is largest)."""
+
+    INFO = 0
+    LOW = 1
+    MEDIUM = 2
+    HIGH = 3
+    CRITICAL = 4
+
+    @classmethod
+    def parse(cls, value: str | int | "Severity") -> "Severity":
+        if isinstance(value, Severity):
+            return value
+        if isinstance(value, int):
+            return cls(value)
+        return cls[value.strip().upper()]
+
+    def __str__(self) -> str:  # human-facing (reports, CLI)
+        return self.name.lower()
+
+
+@dataclass(frozen=True)
+class Finding:
+    """A single vulnerability surfaced by an Assessor."""
+
+    id: str
+    category: str  # e.g. prompt_injection, data_exfiltration, tool_abuse, jailbreak
+    severity: Severity
+    attack_vector: str
+    evidence: str
+    resolved: bool = False
+
+    def resolve(self) -> "Finding":
+        return replace(self, resolved=True)
+
+
+@dataclass
+class Assessment:
+    """The result of one adversarial assessment pass."""
+
+    findings: list[Finding] = field(default_factory=list)
+
+    def unresolved(self) -> list[Finding]:
+        return [f for f in self.findings if not f.resolved]
+
+    def open_ids(self) -> frozenset[str]:
+        return frozenset(f.id for f in self.unresolved())
+
+    def max_severity(self) -> Severity:
+        openf = self.unresolved()
+        return max((f.severity for f in openf), default=Severity.INFO)
+
+
+@dataclass
+class PolicyPatch:
+    """A structured, auditable change to a policy.
+
+    ``ops`` is a list of operations, each a dict with keys:
+      - op: "allow_add" | "allow_remove" | "set_default" | "set_flag" |
+            "tool_deny" | "tool_allow"
+      - path: dotted policy path, e.g. "network.allow", "tools.deny",
+              "network.default", "prompt.system_guard"
+      - value: entry / default / flag value
+    """
+
+    ops: list[dict[str, Any]] = field(default_factory=list)
+    rationale: str = ""
+    addresses: frozenset[str] = frozenset()  # finding ids this patch targets
+
+    def is_empty(self) -> bool:
+        return not self.ops
+
+    def widens_surface(self) -> bool:
+        """True if any op relaxes a control (grows the attack surface)."""
+        for op in self.ops:
+            kind = op.get("op")
+            if kind in ("allow_add", "tool_allow"):
+                return True
+            if kind == "set_default" and op.get("value") == "allow":
+                return True
+            if kind == "set_flag" and op.get("value") is False:
+                return True
+        return False
+
+    def is_valid(self, policy: "Policy") -> bool:
+        """A patch is valid if it targets an open finding and does not widen
+        the attack surface (defense-in-depth: we only ever tighten here)."""
+        if self.is_empty():
+            return False
+        if self.widens_surface():
+            return False
+        return bool(self.addresses)
+
+
+@dataclass
+class Recommendation:
+    """LLM output: analysis plus a proposed remediation."""
+
+    root_cause: str
+    patch: PolicyPatch
+    new_tests: list["AttackCase"] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class AttackCase:
+    """A reproducible adversarial test case an Assessor can execute."""
+
+    id: str
+    category: str
+    severity: Severity
+    payload: str
+    # Which policy control neutralizes this attack; when the control is active
+    # the mock assessor treats the case as defended.
+    requires_control: str = ""
+
+
+@dataclass
+class Policy:
+    """Runtime protection policy enforced by the Sandbox. Mirrors the yaml
+    schema in policies/baseline.yaml (see docs/DESIGN.md §4)."""
+
+    version: int = 1
+    network: dict[str, Any] = field(
+        default_factory=lambda: {"default": "deny", "allow": []}
+    )
+    filesystem: dict[str, Any] = field(
+        default_factory=lambda: {"read": [], "write": []}
+    )
+    tools: dict[str, Any] = field(
+        default_factory=lambda: {"allow": [], "deny": []}
+    )
+    prompt: dict[str, Any] = field(
+        default_factory=lambda: {"system_guard": False, "max_input_tokens": 4000}
+    )
+
+    def copy(self) -> "Policy":
+        return Policy(
+            version=self.version,
+            network=copy.deepcopy(self.network),
+            filesystem=copy.deepcopy(self.filesystem),
+            tools=copy.deepcopy(self.tools),
+            prompt=copy.deepcopy(self.prompt),
+        )
+
+    # --- dotted-path access used by patches -------------------------------
+    def _section(self, section: str) -> dict[str, Any]:
+        if not hasattr(self, section):
+            raise KeyError(f"unknown policy section: {section}")
+        return getattr(self, section)
+
+    def get_path(self, path: str) -> Any:
+        section, _, key = path.partition(".")
+        return self._section(section)[key]
+
+    def controls(self) -> frozenset[str]:
+        """The set of active protection controls, named the way AttackCases
+        reference them via ``requires_control``."""
+        active: set[str] = set()
+        if self.network.get("default") == "deny":
+            active.add("network.default_deny")
+        if self.prompt.get("system_guard"):
+            active.add("prompt.system_guard")
+        for tool in self.tools.get("deny", []):
+            active.add(f"tools.deny:{tool}")
+        return frozenset(active)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "version": self.version,
+            "network": copy.deepcopy(self.network),
+            "filesystem": copy.deepcopy(self.filesystem),
+            "tools": copy.deepcopy(self.tools),
+            "prompt": copy.deepcopy(self.prompt),
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "Policy":
+        base = cls()
+        return cls(
+            version=int(data.get("version", base.version)),
+            network={**base.network, **data.get("network", {})},
+            filesystem={**base.filesystem, **data.get("filesystem", {})},
+            tools={**base.tools, **data.get("tools", {})},
+            prompt={**base.prompt, **data.get("prompt", {})},
+        )
+
+
+@dataclass
+class IterationResult:
+    index: int
+    open_before: frozenset[str]
+    open_after: frozenset[str]
+    applied_patch: PolicyPatch | None
+    max_severity: Severity
+
+
+@dataclass
+class RunResult:
+    iterations: list[IterationResult] = field(default_factory=list)
+    converged: bool = False
+    stop_reason: str = ""
+    final_policy: Policy | None = None
+
+    @property
+    def iteration_count(self) -> int:
+        return len(self.iterations)

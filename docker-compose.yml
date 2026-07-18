@@ -1,0 +1,37 @@
+# Reproducible security-testing environment (PLAN.md "Deployment").
+#
+#   docker compose up orchestrator          # self-contained, mock backends
+#   docker compose --profile gpu up vllm     # opt-in real Nemotron endpoint
+#
+# Real OpenShell/HiddenLayer/Nemotron are selected via .env (see .env.example).
+
+services:
+  orchestrator:
+    build: .
+    env_file:
+      - path: .env
+        required: false
+    volumes:
+      - ./runs:/app/runs
+      - ./policies:/app/policies
+    # depends_on vllm only when you opt into the gpu profile + LLM=nemotron.
+
+  # Nemotron served via vLLM, OpenAI-compatible API. Opt-in: needs a GPU + NGC
+  # access. Enable with:  docker compose --profile gpu up
+  vllm:
+    image: vllm/vllm-openai:latest
+    profiles: ["gpu"]
+    command: >
+      --model nvidia/Nemotron-4-340B-Instruct
+      --served-model-name nemotron
+    ports:
+      - "8000:8000"
+    environment:
+      - HUGGING_FACE_HUB_TOKEN=${HF_TOKEN:-}
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]

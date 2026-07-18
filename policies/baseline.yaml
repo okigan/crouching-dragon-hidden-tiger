@@ -1,0 +1,21 @@
+# Baseline runtime protection policy (see docs/DESIGN.md §4).
+# Intentionally under-hardened: the improvement loop tightens it until the
+# HiddenLayer assessment reports no open findings.
+version: 1
+network:
+  default: allow          # deliberately open: loop should flip to deny
+  allow: []
+filesystem:
+  read:
+    - /workspace
+  write:
+    - /workspace/out
+tools:
+  allow:
+    - http_get
+    - file_read
+    - shell_exec        # deliberately risky: loop should deny this
+  deny: []
+prompt:
+  system_guard: false   # deliberately off: loop should enable this
+  max_input_tokens: 4000
