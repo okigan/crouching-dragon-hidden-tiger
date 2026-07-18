@@ -219,13 +219,16 @@ The pivot is **from "HiddenLayer = red team" to "defense-in-depth
 co-evaluation":** keep the loop, but model HiddenLayer as the content-detection
 layer alongside OpenShell's capability layer, with the corpus as the adversary.
 
-- **Phase A — framing (this change).** Correct the roles here and in the README;
-  no behavior change. The current code already matches this model (the corpus is
-  ours; HiddenLayer only detects), so this is a documentation correction.
-- **Phase B — second defense layer.** Add a guardrail/detection policy (which
-  HiddenLayer categories to block) as a first-class defense; let blue remediate a
-  finding at *either* layer; show both policies evolving in the report. This is
-  where HiddenLayer becomes an active defense, not just an observer.
+- **Phase A — framing (done).** Corrected the roles here and in the README.
+- **Phase B — two-layer defense (done).** Every attack is evaluated against both
+  layers (`backends/evaluate.py`): HiddenLayer detection *and* OpenShell
+  enforcement. An attack lands only if it evades both; the corpus mixes overt
+  attacks (HiddenLayer catches them) with **evasion** attacks (`hl_detects=False`,
+  verified against the live API) that slip detection and force OpenShell
+  hardening. The report surfaces a **Detection gaps** panel and a per-attack
+  two-layer table (HiddenLayer passed/detected · OpenShell open/blocked · stopped
+  by). A detection is currently *modeled* as a block; wiring HiddenLayer's real
+  `block_*` project policy is future work.
 - **Phase C — APE grounding.** Classify the corpus by HiddenLayer's Adversarial
   Prompt Engineering (APE) taxonomy — technique (how) + objective (what) — and
   link findings to it, so the red side speaks a rigorous shared lexicon.

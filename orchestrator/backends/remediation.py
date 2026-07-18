@@ -99,6 +99,9 @@ def build_recommendation(
         # attack (a real detector re-checks it), not a placeholder string.
         payload=target.attack_vector,
         requires_control=remedy["control"],
+        # Carry over the detection outcome: a landed finding evaded HiddenLayer,
+        # so its regression guard is also an evasion case OpenShell must hold.
+        hl_detects=target.hl_detected,
     )
     return Recommendation(
         root_cause=narrative or remedy["root_cause"],

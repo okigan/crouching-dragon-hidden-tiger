@@ -55,6 +55,9 @@ class Finding:
     evidence: str
     resolved: bool = False
     references: tuple[DocRef, ...] = ()  # real docs for this threat class
+    # Defense-in-depth outcome (§9): which layer, if any, stopped this attack.
+    hl_detected: bool = False        # HiddenLayer flagged the payload (content layer)
+    openshell_blocked: bool = False  # OpenShell policy denies the capability
 
     def resolve(self) -> "Finding":
         return replace(self, resolved=True)
@@ -147,9 +150,14 @@ class AttackCase:
     category: str
     severity: Severity
     payload: str
-    # Which policy control neutralizes this attack; when the control is active
-    # the mock assessor treats the case as defended.
+    # Which OpenShell control neutralizes this attack; when the control is active
+    # the assessor treats the capability layer as blocking it.
     requires_control: str = ""
+    # Whether HiddenLayer's content detection is expected to flag this payload.
+    # False = an evasion / detection gap that only OpenShell can catch. The live
+    # HiddenLayer assessor overrides this with the real API verdict; the mock and
+    # the offline default use it directly.
+    hl_detects: bool = True
 
 
 @dataclass

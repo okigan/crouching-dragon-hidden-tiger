@@ -29,7 +29,9 @@ def test_sandbox_deploy_teardown():
 def test_assessor_findings_gated_by_policy():
     assessor = MockAssessor()
     weak = assessor.assess("h", weak_policy())  # open egress, no guard, no deny
-    assert len(weak.unresolved()) == 5
+    # only the 3 HiddenLayer-evading attacks land; the 2 it detects are caught
+    assert len(weak.unresolved()) == 3
+    assert {f.id for f in weak.unresolved()} == {"ATK-101", "ATK-102", "ATK-103"}
 
     strong = assessor.assess("h", hardened_policy())
     assert strong.unresolved() == []  # all defended
@@ -48,10 +50,10 @@ def test_llm_targets_highest_severity_open_finding():
     assessor = MockAssessor()
     assessment = assessor.assess("h", weak_policy())
     rec = MockLLM().analyze(assessment, weak_policy())
-    # highest severity, ties broken by id: ATK-005 (CRITICAL) is addressed first
-    assert rec.patch.addresses == {"ATK-005"}
+    # highest severity landed (evader) finding, ties by id: ATK-103 (CRITICAL code)
+    assert rec.patch.addresses == {"ATK-103"}
     assert rec.patch.ops[0]["path"] == "tools.deny"
-    assert rec.new_tests and rec.new_tests[0].id == "REG-ATK-005"
+    assert rec.new_tests and rec.new_tests[0].id == "REG-ATK-103"
 
 
 def test_llm_empty_patch_when_no_open_findings():

@@ -16,49 +16,52 @@ uv run security-orchestrator run --save-policy runs/latest/hardened.yaml
 ```
 
 - **A hardened OpenShell policy** (`runs/latest/hardened.yaml`). The starting
-  policy (open egress, `shell_exec` allowed, no injection guard) is rewritten
-  into one that denies egress by default, drops the dangerous tool, and enables
-  the prompt guard.
-- **A headline result: exfil-success-rate 100% → 0%.** Every attack lands at the
-  start; none land at the end. That drop is the whole point.
-- **A visual report** (`runs/latest/report.html`) showing every round: what was
-  attacked, what the blue team changed, and the curve to zero.
-- **A recursive-intelligence delta** proving the *policy* did the work, not the
-  test harness (see the ablation below).
+  policy (open egress, `shell_exec`/`code_exec` allowed) is rewritten to deny
+  egress by default and drop the dangerous tools.
+- **A defense-in-depth result: attack-success-rate 60% → 0%.** HiddenLayer
+  catches the obvious attacks at the content layer immediately; the ones that
+  **evade detection** land until OpenShell is hardened to stop them.
+- **The detection gaps, made explicit** — which prompts *passed through*
+  HiddenLayer, and the exact OpenShell control added to catch each.
+- **A visual report** (`runs/latest/report.html`) with a two-layer view
+  (HiddenLayer vs OpenShell) per attack and the curve to zero.
 
 ### The report it produces
 
-![Sample run report — a live HiddenLayer run hardening the OpenShell policy over 6 rounds](docs/sample-report.png)
+![Sample run report — a live HiddenLayer run; 3 attacks evade detection and OpenShell is hardened to catch them](docs/sample-report.png)
 
-*A real run with `ASSESSOR=hiddenlayer`: the **OpenShell policy evolution** panel
-shows each version bump and the live HiddenLayer signal that triggered it
-(prompt-injection `LLM01`, `input_pii`, `input_code`); the rounds below show the
-five detections converging to zero. Each remediation expands to the exact
-**OpenShell config applied** and links to the **real documentation** for that
-detection (OWASP LLM Top-10, MITRE ATLAS, HiddenLayer docs).*
+*A real run with `ASSESSOR=hiddenlayer`. The **Detection gaps** panel lists the
+attacks that passed through HiddenLayer and the OpenShell control that backstops
+each; the two-layer table shows, per round, whether **HiddenLayer** detected the
+payload and whether **OpenShell** blocked it (LANDED = evaded both). Each
+remediation expands to the exact **OpenShell config applied** and links to the
+**real documentation** (OWASP LLM Top-10, MITRE ATLAS, HiddenLayer docs).*
 
-## The proof it isn't cheating: the ablation
+## Two layers of defense (and the ablation)
 
-Today, OpenShell is the **guard that stops attacks** — HiddenLayer *detects* and
-classifies them, but the OpenShell policy is what neutralizes them (making it a
-clean ablation target; a HiddenLayer *blocking* layer is [Phase B](docs/DESIGN.md)).
-An attack is stopped by the OpenShell policy, not by the harness. (The default
-run enforces this with an OpenShell-compatible policy model; live OpenShell is a
-credential-guarded adapter — see the status table below.) Run the loop enforcement ON vs
-OFF:
+Attacks are stopped by **two layers**: **HiddenLayer** detects malicious content,
+and **OpenShell** enforces capabilities (egress, tools). An attack **lands** only
+if it evades *both* — HiddenLayer doesn't detect it *and* OpenShell doesn't deny
+the capability it needs. The interesting ones are the **detection gaps**:
+benign-sounding attacks HiddenLayer misses, which only OpenShell can catch.
+
+The ablation toggles the OpenShell layer to prove it's doing the work — with it
+off, the detection gaps stay open (HiddenLayer still catches the obvious ones):
 
 ```bash
 uv run security-orchestrator ablate
 ```
 
-| enforcement | exfil-success start → end | delta |
-|-------------|---------------------------|-------|
-| **ON**  | 100% → 0%   | **−100%** |
-| **OFF** | 100% → 100% | 0% |
+| OpenShell enforcement | attack-success start → end | converges? |
+|-----------------------|----------------------------|-----------|
+| **ON**  | 60% → 0%   | yes — OpenShell closes the gaps |
+| **OFF** | 60% → 86%  | no — the gaps never close |
 
-With enforcement OFF the blue team still learns and patches, but the guard never
-takes effect, so attacks keep landing. Only the enforced run drops to zero — the
-gap is the recursive-intelligence signal.
+Both start at 60% (HiddenLayer catches 2 of 5 outright). With enforcement ON,
+OpenShell is hardened until the 3 evaders are caught too; with it OFF they keep
+landing. The gap is the recursive-intelligence signal. (The default run uses an
+OpenShell-compatible policy model; live OpenShell is a credential-guarded
+adapter — see the status table below.)
 
 ## How it works
 

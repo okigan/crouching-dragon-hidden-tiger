@@ -61,6 +61,8 @@ class Reporter:
                     "category": f.category,
                     "severity": str(f.severity),
                     "resolved": f.resolved,
+                    "hl_detected": f.hl_detected,
+                    "openshell_blocked": f.openshell_blocked,
                     "evidence": f.evidence,
                     "references": [
                         {"source": r.source, "label": r.label,
@@ -213,6 +215,46 @@ def _policy_evolution(traces: list[dict]) -> str:
     )
 
 
+def _detection_gaps(traces: list[dict]) -> str:
+    """Highlight the prompts that passed through HiddenLayer (were not detected)
+    and the OpenShell control that had to be added to catch each — the whole
+    point of defense in depth."""
+    if not traces:
+        return ""
+    # evaders: base-corpus findings HiddenLayer did not detect (from round 0)
+    evaders = {
+        f["id"]: f for f in traces[0]["findings"]
+        if not f.get("hl_detected", False) and not f["id"].startswith("REG-")
+    }
+    if not evaders:
+        return ""
+    # for each evader, the OpenShell op that addressed it
+    fix = {}
+    for t in traces:
+        rec = t.get("remediation")
+        if rec and rec.get("ops"):
+            for aid in rec.get("addresses", []):
+                fix[aid] = _op_summary(rec["ops"][0])
+    rows = []
+    for fid, f in evaders.items():
+        change = fix.get(fid, "—")
+        rows.append(
+            f'<li><span class="gapid">{html.escape(fid)}</span>'
+            f'<span class="gapcat">{html.escape(f["category"])}</span>'
+            f'<span class="gaparrow">passed HiddenLayer →</span>'
+            f'<code class="chg">{html.escape(change)}</code></li>'
+        )
+    caught = sum(1 for f in traces[0]["findings"]
+                 if f.get("hl_detected") and not f["id"].startswith("REG-"))
+    return (
+        '<div class="gaps"><h2>Detection gaps — where OpenShell backstops HiddenLayer</h2>'
+        f'<div class="evo-sub">HiddenLayer caught {caught} attack(s) at the content '
+        f'layer; these {len(evaders)} evaded content detection and needed an '
+        "OpenShell capability control to stop:</div>"
+        f'<ul class="gaplist">{"".join(rows)}</ul></div>'
+    )
+
+
 def _iteration_card(trace: dict) -> str:
     i = trace["iteration"]
     open_ids = trace["open"]
@@ -221,18 +263,36 @@ def _iteration_card(trace: dict) -> str:
 
     finding_rows = []
     for f in findings:
-        state = "defended" if f["resolved"] else "OPEN"
         cls = "resolved" if f["resolved"] else "open"
+        hl_detected = f.get("hl_detected", False)
+        os_blocked = f.get("openshell_blocked", False)
+        hl_cell = (
+            '<span class="layer ok">detected</span>' if hl_detected
+            else '<span class="layer gap">passed</span>'
+        )
+        os_cell = (
+            '<span class="layer ok">blocked</span>' if os_blocked
+            else '<span class="layer gap">open</span>'
+        )
+        if not f["resolved"]:
+            outcome = '<span class="state landed">LANDED</span>'
+        elif hl_detected and not os_blocked:
+            outcome = '<span class="state hlonly">HiddenLayer</span>'
+        elif os_blocked and not hl_detected:
+            outcome = '<span class="state osonly">OpenShell</span>'
+        else:
+            outcome = '<span class="state">both</span>'
         finding_rows.append(
             f'<tr class="{cls}"><td>{html.escape(f["id"])}</td>'
             f'<td>{html.escape(f["category"])}</td>'
             f'<td>{_badge(f["severity"])}</td>'
-            f'<td class="state">{state}</td>'
-            f'<td class="ev">{html.escape(f["evidence"])}</td></tr>'
+            f'<td>{hl_cell}</td><td>{os_cell}</td>'
+            f'<td>{outcome}</td></tr>'
         )
     findings_table = (
         '<table class="findings"><thead><tr><th>ID</th><th>category</th>'
-        "<th>severity</th><th>state</th><th>evidence</th></tr></thead>"
+        "<th>severity</th><th>HiddenLayer</th><th>OpenShell</th>"
+        "<th>stopped&nbsp;by</th></tr></thead>"
         f'<tbody>{"".join(finding_rows)}</tbody></table>'
     )
 
@@ -304,6 +364,7 @@ def _iteration_card(trace: dict) -> str:
 def _render_html(traces: list[dict], run: RunResult) -> str:
     cards = "".join(_iteration_card(t) for t in traces)
     evolution = _policy_evolution(traces)
+    gaps = _detection_gaps(traces)
     converged = run.converged
     status_txt = "CONVERGED" if converged else "STOPPED"
     status_cls = "ok" if converged else "warn"
@@ -376,6 +437,22 @@ def _render_html(traces: list[dict], run: RunResult) -> str:
   .evo .chg {{ background:rgba(47,189,107,.12); color:#2fbd6b; padding:1px 7px;
     border-radius:5px; font-size:12px; }}
   .evo .trig {{ color:var(--muted); }}
+  .gaps {{ border:1px solid #d1660f55; border-radius:12px; padding:14px 18px;
+    margin-bottom:26px; background:rgba(209,102,15,.06); }}
+  .gaps h2 {{ font-size:15px; margin:0 0 2px; }}
+  ul.gaplist {{ list-style:none; margin:0; padding:0; }}
+  ul.gaplist li {{ display:flex; align-items:center; gap:10px; flex-wrap:wrap;
+    padding:6px 0; border-bottom:1px solid var(--line); font-size:13px; }}
+  ul.gaplist li:last-child {{ border-bottom:0; }}
+  .gapid {{ font-weight:600; min-width:64px; }}
+  .gapcat {{ color:var(--muted); }}
+  .gaparrow {{ color:#d1660f; font-weight:600; }}
+  .layer {{ font-size:11px; font-weight:600; padding:1px 7px; border-radius:9px; }}
+  .layer.ok {{ background:rgba(47,189,107,.15); color:#2fbd6b; }}
+  .layer.gap {{ background:rgba(209,102,15,.15); color:#d1660f; }}
+  .state.landed {{ color:#b3153b; }}
+  .state.hlonly {{ color:#2fbd6b; }}
+  .state.osonly {{ color:var(--accent); }}
   .evo .hl {{ margin-left:auto; font-size:11px; font-weight:600; padding:1px 8px;
     border-radius:10px; background:#3a1418; color:#f0808f; }}
   .iter {{ border:1px solid var(--line); border-radius:12px; padding:14px 16px;
@@ -443,6 +520,7 @@ def _render_html(traces: list[dict], run: RunResult) -> str:
     <div class="metric"><b>v{final_v}</b><span>final policy</span></div>
     <div class="trend" title="exfil-success-rate per round">{bars}</div>
   </div>
+  {gaps}
   {evolution}
   {cards}
 </div>"""
