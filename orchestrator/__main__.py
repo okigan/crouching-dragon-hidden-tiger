@@ -69,6 +69,17 @@ def _ablate(args: argparse.Namespace) -> int:
     return 0
 
 
+def _serve(args: argparse.Namespace) -> int:
+    try:
+        import uvicorn
+    except ImportError:
+        print("web UI needs the 'web' extra: uv run --extra web security-orchestrator serve")
+        return 1
+    print(f"serving run reports at http://{args.host}:{args.port}")
+    uvicorn.run("orchestrator.web:app", host=args.host, port=args.port)
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="orchestrator")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -90,6 +101,11 @@ def main(argv: list[str] | None = None) -> int:
     enf.add_argument("--no-enforce", dest="enforce", action="store_false",
                      help="ablation: disable enforcement, attacks always land")
     run.set_defaults(func=_run)
+
+    sv = sub.add_parser("serve", help="light web UI to browse run reports")
+    sv.add_argument("--host", default="127.0.0.1")
+    sv.add_argument("--port", type=int, default=8090)
+    sv.set_defaults(func=_serve)
 
     ab = sub.add_parser("ablate", help="run enforcement ON vs OFF and report delta")
     ab.add_argument("--policy", default="policies/permissive.yaml")
