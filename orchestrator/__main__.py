@@ -49,6 +49,8 @@ def _run(args: argparse.Namespace) -> int:
           f"llm={settings.llm} · enforce={enforce}")
     if args.out:
         print(f"visual report: {Path(args.out) / 'report.html'}")
+        print(f"attack prompts: {Path(args.out) / 'attacks.json'} · "
+              f"{Path(args.out) / 'attacks.md'}")
     if args.save_policy:
         store.save(args.save_policy)
         print(f"hardened policy written to {args.save_policy}")
