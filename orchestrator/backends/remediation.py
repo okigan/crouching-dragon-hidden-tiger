@@ -37,6 +37,18 @@ REMEDIATION: dict[str, dict] = {
         "control": "prompt.system_guard",
         "root_cause": "No system-prompt guard, so injected instructions win.",
     },
+    "pii_exfiltration": {
+        "keyword": "redact_pii",
+        "op": {"op": "set_flag", "path": "prompt.pii_redaction", "value": True},
+        "control": "prompt.pii_redaction",
+        "root_cause": "PII is neither redacted nor blocked, allowing leakage.",
+    },
+    "code_injection": {
+        "keyword": "deny_code_exec",
+        "op": {"op": "tool_deny", "path": "tools.deny", "value": "code_exec"},
+        "control": "tools.deny:code_exec",
+        "root_cause": "An arbitrary code-execution tool is reachable by the agent.",
+    },
 }
 
 KEYWORD_TO_CATEGORY = {v["keyword"]: k for k, v in REMEDIATION.items()}

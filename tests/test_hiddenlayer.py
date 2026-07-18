@@ -49,7 +49,8 @@ def hardened() -> Policy:
     p = Policy()
     p.network["default"] = "deny"
     p.prompt["system_guard"] = True
-    p.tools["deny"] = ["shell_exec"]
+    p.prompt["pii_redaction"] = True
+    p.tools["deny"] = ["shell_exec", "code_exec"]
     return p
 
 
@@ -68,7 +69,7 @@ def test_flagged_threats_open_until_policy_defends():
     flagged = {"prompt_injection": True, "unsafe_input": True}
     a = _assessor_with(_FakeClient(flagged))
     weak_findings = a.assess("h", weak())
-    assert len(weak_findings.unresolved()) == 3
+    assert len(weak_findings.unresolved()) == 5
     assert "HiddenLayer flagged [LLM01]" in weak_findings.findings[0].evidence
 
     a2 = _assessor_with(_FakeClient(flagged))
@@ -84,7 +85,7 @@ def test_fail_closed_on_api_error():
     a = _assessor_with(_FakeClient({}, raises=RuntimeError("cloudflare 403")))
     result = a.assess("h", weak())
     # error -> treated as a threat, unresolved under a permissive policy
-    assert len(result.unresolved()) == 3
+    assert len(result.unresolved()) == 5
     assert "fail-closed" in result.findings[0].evidence
     # ...but a defending policy still resolves it
     a2 = _assessor_with(_FakeClient({}, raises=RuntimeError("boom")))
@@ -104,4 +105,4 @@ def test_detections_cached_per_payload():
     a = _assessor_with(client)
     a.assess("h", weak())
     a.assess("h", weak())  # second round: same payloads -> cache hit
-    assert calls["n"] == 3  # 3 distinct payloads, analyzed once each
+    assert calls["n"] == 5  # 5 distinct payloads, analyzed once each

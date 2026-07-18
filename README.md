@@ -27,12 +27,13 @@ uv run security-orchestrator run --save-policy runs/latest/hardened.yaml
 
 ### The report it produces
 
-![Sample run report — permissive policy hardened to convergence over 4 rounds](docs/sample-report.png)
+![Sample run report — a live HiddenLayer run hardening the OpenShell policy over 6 rounds](docs/sample-report.png)
 
-*Each round: the findings discovered (severity + OPEN/defended), the remediation
-the blue team applied to the policy, and the exfil-success-rate trending to zero.
-With a live LLM the remediation is tagged `nemotron`; the default uses a
-deterministic heuristic so the run is reproducible with zero setup.*
+*A real run with `ASSESSOR=hiddenlayer`: the **OpenShell policy evolution** panel
+shows each version bump and the live HiddenLayer signal that triggered it
+(prompt-injection `LLM01`, `input_pii`, `input_code`); the rounds below show the
+five detections converging to zero. Each finding's evidence is the actual
+HiddenLayer verdict.*
 
 ## The proof it isn't cheating: the ablation
 
@@ -126,7 +127,7 @@ honest, not aspirational.
 | **Recursive Intelligence** | Track | ✅ Demonstrated | Run-over-run improvement is *measured*: the ablation harness reports exfil-success-rate 100%→0% with enforcement on vs. a flat 100% control — `security-orchestrator ablate`, plus the convergence curve in every report. |
 | **Best Use of vLLM** | Bounty | ✅ Demonstrated | A live OpenAI-compatible vLLM endpoint drives the blue team (`NemotronLLM`), with response validation and a heuristic fallback. Ran end-to-end against a self-hosted endpoint. |
 | **NVIDIA OpenShell** (policy is the sole guard) | Bounty | ◑ Architected | The sandbox models OpenShell as the *sole* egress guard, with the enforcement on/off ablation that proves the policy — not the harness — stops attacks. Real OpenShell CLI/schema wiring is a seam. |
-| **HiddenLayer Runtime Security** | Bounty | ✅ Demonstrated | Every attack payload is sent through HiddenLayer's live prompt analyzer; real detections (OWASP LLM01 prompt-injection, unsafe-input, …) drive the findings, and the assessor is **fail-closed** on API/WAF errors. Enable with `ASSESSOR=hiddenlayer`. |
+| **HiddenLayer Runtime Security** | Bounty | ✅ Demonstrated | Every attack payload is sent through HiddenLayer's live prompt analyzer; real, **distinct** detections (OWASP LLM01 prompt-injection, `input_pii`, `input_code`, unsafe-input) drive the findings, each mapping to a different OpenShell control, and the assessor is **fail-closed** on API/WAF errors. Enable with `ASSESSOR=hiddenlayer`. |
 | **Best Use of Nemotron** | Bounty | ◑ Ready | The vLLM adapter is model-agnostic and runs today against any served model; point `NEMOTRON_MODEL` at Nemotron to make it the reasoning model for the blue team. |
 | **Most Commercializable** | Bounty (optional) | ○ Narrative | Positioning: autonomous-agent security co-evaluation as a product. |
 

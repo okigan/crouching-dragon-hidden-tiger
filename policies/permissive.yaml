@@ -17,7 +17,9 @@ tools:
     - file_read
     - file_write
     - shell_exec          # arbitrary command execution
+    - code_exec           # arbitrary code execution
   deny: []
 prompt:
   system_guard: false     # no protection against prompt injection
+  pii_redaction: false    # PII flows through unredacted
   max_input_tokens: 8000

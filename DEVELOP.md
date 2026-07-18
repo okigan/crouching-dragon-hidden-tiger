@@ -64,15 +64,34 @@ Every backend defaults to a deterministic `mock`; real ones opt in via env
 | `NEMOTRON_BASE_URL` / `NEMOTRON_MODEL` / `NEMOTRON_KEY` / `NEMOTRON_TIMEOUT` | | vLLM endpoint |
 | `OPENSHELL_*`, `HIDDENLAYER_*` | | credentials for those services |
 
+### Backend reality: what's real vs mock
+
+Every role has a deterministic mock (the default, so the lab runs offline) and a
+real adapter. Current state of the real adapters:
+
+| Role | Default (offline) | Real adapter | Status |
+|------|-------------------|--------------|--------|
+| Assessor — **HiddenLayer** (red) | `MockAssessor` (built-in corpus) | `HiddenLayerAssessor` | ✅ **Implemented & live-verified** — real prompt-analyzer detections drive findings |
+| LLM — **Nemotron/vLLM** (blue) | `MockLLM` (heuristic) | `NemotronLLM` | ✅ **Implemented & live-verified** — runs against any OpenAI-compatible vLLM endpoint |
+| Sandbox — **NVIDIA OpenShell** | `MockSandbox` (in-process policy model) | `OpenShellSandbox` | ⚠️ **Stub** (`NotImplementedError`) — the one remaining real-implementation gap |
+
+So the only component still lacking a real implementation is **OpenShell**. The
+mocks are the intended default for offline/CI runs; the real adapters swap in via
+env. To finish OpenShell you need NemoClaw/OpenShell CLI onboarding (the
+authoritative YAML schema), then implement `OpenShellSandbox.deploy` to translate
+`Policy` → a real sandbox spec and enforce egress there.
+
 **LLM adapter behavior.** With `LLM=nemotron`, the model *proposes* which finding
 to fix and narrates the root cause; its choice is validated against the known
 remediation table and **falls back to the deterministic heuristic** when the
-response is unusable or the endpoint is slow/unreachable. So enabling a live
-model (even a tiny one) adds real analysis without ever risking convergence.
+response is unusable or the endpoint is slow/unreachable — so a live model (even
+a tiny one) adds real analysis without ever risking convergence.
 
-**OpenShell / HiddenLayer.** The adapters in `orchestrator/backends/real.py` are
-credential-guarded seams (clearly marked `TODO`); the Nemotron/vLLM adapter in
-that file is fully implemented.
+**HiddenLayer adapter behavior.** With `ASSESSOR=hiddenlayer`, each attack
+payload is sent through HiddenLayer's live prompt analyzer; distinct real signals
+(`prompt_injection`/LLM01, `input_pii`, `input_code`, …) become findings, each
+mapped to the OpenShell control that neutralizes it. **Fail-closed:** an
+API/WAF error is treated as an unresolved threat, not waved through.
 
 ## Testing
 
