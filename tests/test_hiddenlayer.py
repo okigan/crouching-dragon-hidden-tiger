@@ -65,29 +65,39 @@ def test_satisfies_assessor_protocol():
     assert isinstance(real.HiddenLayerAssessor("cid", "sec"), Assessor)
 
 
-def test_flagged_threats_open_until_policy_defends():
-    flagged = {"prompt_injection": True, "unsafe_input": True}
-    a = _assessor_with(_FakeClient(flagged))
-    weak_findings = a.assess("h", weak())
-    assert len(weak_findings.unresolved()) == 5
-    assert "HiddenLayer flagged [LLM01]" in weak_findings.findings[0].evidence
+def test_detected_attacks_caught_at_content_layer():
+    # HiddenLayer flags every payload -> caught at the content layer, resolved
+    # regardless of the OpenShell policy (nothing lands).
+    a = _assessor_with(_FakeClient({"prompt_injection": True, "unsafe_input": True}))
+    result = a.assess("h", weak())
+    assert result.unresolved() == []
+    assert all(f.hl_detected for f in result.findings)
+    assert "HiddenLayer detected [LLM01]" in result.findings[0].evidence
 
-    a2 = _assessor_with(_FakeClient(flagged))
-    assert a2.assess("h", hardened()).unresolved() == []  # policy defends all
 
+def test_evaders_pass_hiddenlayer_and_fall_to_openshell():
+    # HiddenLayer detects nothing -> every attack evades the content layer and
+    # must be caught by OpenShell.
+    a = _assessor_with(_FakeClient({}))
+    landed = a.assess("h", weak())
+    assert len(landed.unresolved()) == 5           # nothing blocks them
+    f = landed.findings[0]
+    assert f.hl_detected is False and f.openshell_blocked is False
+    assert "passed HiddenLayer" in f.evidence and "LANDED" in f.evidence
 
-def test_unflagged_payload_is_not_a_finding():
-    a = _assessor_with(_FakeClient({}))  # nothing detected
-    assert a.assess("h", weak()).unresolved() == []
+    a2 = _assessor_with(_FakeClient({}))
+    blocked = a2.assess("h", hardened())            # OpenShell now blocks them
+    assert blocked.unresolved() == []
+    assert all(f.openshell_blocked and not f.hl_detected for f in blocked.findings)
 
 
 def test_fail_closed_on_api_error():
+    # API/WAF error -> treated as NOT detected (fail closed), so OpenShell must
+    # catch it; it lands under a permissive policy.
     a = _assessor_with(_FakeClient({}, raises=RuntimeError("cloudflare 403")))
     result = a.assess("h", weak())
-    # error -> treated as a threat, unresolved under a permissive policy
     assert len(result.unresolved()) == 5
     assert "fail-closed" in result.findings[0].evidence
-    # ...but a defending policy still resolves it
     a2 = _assessor_with(_FakeClient({}, raises=RuntimeError("boom")))
     assert a2.assess("h", hardened()).unresolved() == []
 

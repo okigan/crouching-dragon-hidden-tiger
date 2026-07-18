@@ -14,9 +14,10 @@ import time
 import urllib.error
 import urllib.request
 
-from ..models import AttackCase, Assessment, Finding, Policy, Recommendation
+from ..models import AttackCase, Assessment, Policy, Recommendation
 from ..references import refs_for_category, refs_from_hl_frameworks
 from .corpus import DEFAULT_CORPUS
+from .evaluate import evaluate
 from .remediation import (
     REMEDIATION,
     REMEDIATION_MENU,
@@ -134,43 +135,23 @@ class HiddenLayerAssessor:
         return detail
 
     def assess(self, handle: str, policy: Policy) -> Assessment:
-        active = policy.controls()
-        findings: list[Finding] = []
+        findings = []
         for case in self._corpus:
             det = self._analyze(case.payload)
-            defended = case.requires_control in active
-            is_threat = det["flagged"]
-            resolved = (not is_threat) or defended
+            # HiddenLayer's live verdict is the content layer. On API/WAF error we
+            # fail closed by treating the payload as NOT reliably detected, so the
+            # capability layer (OpenShell) is required to catch it.
+            hl_detected = det["flagged"] and not det["error"]
             if det["error"]:
-                evidence = (
-                    f"HiddenLayer/WAF error ({det['error']}) — fail-closed; "
-                    + ("defended by " + case.requires_control if defended
-                       else "missing control " + case.requires_control)
-                )
-            elif is_threat:
-                tag = ", ".join(det["labels"]) or "threat"
-                evidence = (
-                    f"HiddenLayer flagged [{tag}]; "
-                    + ("defended by " + case.requires_control if defended
-                       else "missing control " + case.requires_control)
-                )
-            else:
-                evidence = "HiddenLayer: no threat detected"
-            if det["error"] or not is_threat:
+                hl_note = f"HiddenLayer error ({det['error']}) — fail-closed, treated as not detected"
                 refs = refs_for_category(case.category)
-            else:
+            elif hl_detected:
+                hl_note = f"HiddenLayer detected [{', '.join(det['labels']) or 'threat'}]"
                 refs = refs_from_hl_frameworks(det.get("frameworks", {}), case.category)
-            findings.append(
-                Finding(
-                    id=case.id,
-                    category=case.category,
-                    severity=case.severity,
-                    attack_vector=case.payload,
-                    evidence=evidence,
-                    resolved=resolved,
-                    references=refs,
-                )
-            )
+            else:
+                hl_note = "passed HiddenLayer — no threat detected"
+                refs = refs_for_category(case.category)
+            findings.append(evaluate(case, hl_detected, hl_note, policy, refs))
         return Assessment(findings=findings)
 
     def add_tests(self, cases: list[AttackCase]) -> None:

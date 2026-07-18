@@ -32,13 +32,15 @@ def test_loop_converges_to_zero_findings():
     result = orch.run()
     assert result.converged is True
     assert result.stop_reason == "no open findings"
-    # 5 findings, fixed one per iteration + 1 verifying pass = 6 iterations
-    assert result.iteration_count == 6
-    # final policy is fully hardened
+    # 3 HiddenLayer-evading attacks land; each fixed in OpenShell, +1 verify = 4
+    assert result.iteration_count == 4
+    # starts at 60% (3 of 5 land), converges to 0
+    assert result.success_rates[0] == 0.6
+    assert result.final_success == 0.0
+    # OpenShell hardened for the evaders only (the 2 detected ones were caught
+    # by HiddenLayer, so no OpenShell control was needed for them)
     fp = result.final_policy
     assert fp.network["default"] == "deny"
-    assert fp.prompt["system_guard"] is True
-    assert fp.prompt["pii_redaction"] is True
     assert "shell_exec" in fp.tools["deny"]
     assert "code_exec" in fp.tools["deny"]
 

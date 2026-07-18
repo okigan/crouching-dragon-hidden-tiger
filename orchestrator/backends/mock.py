@@ -17,6 +17,7 @@ from ..models import (
 )
 from ..references import refs_for_category
 from .corpus import DEFAULT_CORPUS
+from .evaluate import evaluate
 from .remediation import heuristic_recommendation
 
 
@@ -51,23 +52,17 @@ class MockAssessor:
         )
 
     def assess(self, handle: str, policy: Policy) -> Assessment:
-        active = policy.controls()
         findings: list[Finding] = []
         for case in self._corpus:
-            defended = case.requires_control in active
+            hl_note = (
+                "HiddenLayer detected (simulated)"
+                if case.hl_detects
+                else "passed HiddenLayer — not detected (simulated)"
+            )
             findings.append(
-                Finding(
-                    id=case.id,
-                    category=case.category,
-                    severity=case.severity,
-                    attack_vector=case.payload,
-                    evidence=(
-                        f"defended by {case.requires_control}"
-                        if defended
-                        else f"missing control {case.requires_control}"
-                    ),
-                    resolved=defended,
-                    references=refs_for_category(case.category),
+                evaluate(
+                    case, case.hl_detects, hl_note, policy,
+                    refs_for_category(case.category),
                 )
             )
         return Assessment(findings=findings)
