@@ -25,19 +25,23 @@ regardless of whether the gated services are present.
 
 ## 2. Component model
 
+```mermaid
+flowchart TD
+    ORCH["Security Orchestrator<br/>(improvement loop)"]
+    ORCH --> SB["Sandbox — OpenShell<br/>the sole guard<br/>mock | real"]
+    ORCH --> AS["Assessor — HiddenLayer<br/>mock | real"]
+    ORCH --> LLM["LLM — Nemotron<br/>mock | real"]
+    ORCH --> PS["PolicyStore<br/>versioned yaml"]
+    ORCH --> RP["Reporter<br/>traces · json / md / html"]
+
+    class AS red
+    class LLM,PS blue
+
+    classDef red fill:#3a1418,stroke:#b3153b,color:#f0808f
+    classDef blue fill:#12233a,stroke:#3457d5,color:#8fb2ff
 ```
-                         ┌────────────────────────┐
-                         │   Security Orchestrator │
-                         │  (improvement loop)     │
-                         └───────────┬────────────┘
-        ┌────────────────┬───────────┼────────────────┬───────────────┐
-        ▼                ▼           ▼                 ▼               ▼
-  ┌───────────┐   ┌────────────┐ ┌────────┐    ┌─────────────┐  ┌──────────┐
-  │ Sandbox   │   │ Assessor   │ │  LLM   │    │ PolicyStore │  │ Reporter │
-  │ (OpenShell)│  │(HiddenLayer)│ │(Nemotron)│  │ (versioned) │  │ (traces) │
-  └───────────┘   └────────────┘ └────────┘    └─────────────┘  └──────────┘
-   mock│real       mock│real     mock│real        yaml files      json/md
-```
+
+Red = the **red team** (attack); blue = the **blue team** (harden). See §9.
 
 ### Interfaces (`orchestrator/interfaces.py`)
 
@@ -66,6 +70,32 @@ regardless of whether the gated services are present.
 ## 3. The improvement loop (`orchestrator/loop.py`)
 
 Direct realization of PLAN.md "Workflow":
+
+```mermaid
+flowchart TD
+    START([load initial policy]) --> DEPLOY[sandbox.deploy · agent + policy]
+    DEPLOY --> EFF{"enforce?"}
+    EFF -- "off (ablation)" --> UNGUARD[policy stripped:<br/>all attacks land]
+    EFF -- on --> GUARD[policy enforced]
+    UNGUARD --> ASSESS
+    GUARD --> ASSESS["assessor.assess<br/>RED · exfil-success-rate"]
+    ASSESS --> OPEN{open findings?}
+    OPEN -- none --> CONV([converged])
+    OPEN -- "same as last round" --> STALL([no-progress stop])
+    OPEN -- some --> ANALYZE["llm.analyze<br/>BLUE · root cause + patch"]
+    ANALYZE --> VALID{patch valid<br/>& tightens?}
+    VALID -- no --> NOREM([no applicable remediation])
+    VALID -- yes --> APPLY[policy_store.apply → new version]
+    APPLY --> GROW[assessor.add_tests · regression]
+    GROW --> DEPLOY
+
+    class ASSESS red
+    class ANALYZE,APPLY blue
+    classDef red fill:#3a1418,stroke:#b3153b,color:#f0808f
+    classDef blue fill:#12233a,stroke:#3457d5,color:#8fb2ff
+```
+
+The pseudocode below is the same loop, showing the actual calls:
 
 ```
 policy = policy_store.load(initial)
