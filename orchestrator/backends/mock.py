@@ -74,6 +74,12 @@ class MockAssessor:
                 self._corpus.append(c)
                 known.add(c.id)
 
+    def detect(self, prompt: str) -> bool:
+        """Screening hook for the generator. The mock has no real detector, so it
+        treats generated candidates as evasions (they are crafted to slip past
+        content detection)."""
+        return False
+
     @property
     def corpus_size(self) -> int:
         return len(self._corpus)

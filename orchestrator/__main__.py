@@ -16,26 +16,32 @@ from .policy_store import PolicyStore
 from .reporter import Reporter
 
 
-def _build(settings: Settings, policy: str, agent: str, max_iters: int,
-           enforce: bool, out: str | None) -> tuple[SecurityOrchestrator, PolicyStore, Reporter]:
-    store = PolicyStore.load(policy)
-    reporter = Reporter(run_dir=out)
-    orch = SecurityOrchestrator(
-        sandbox=settings.build_sandbox(),
-        assessor=settings.build_assessor(),
-        llm=settings.build_llm(),
-        store=store,
-        reporter=reporter,
-        config=LoopConfig(agent=agent, max_iters=max_iters, enforce=enforce),
-    )
-    return orch, store, reporter
-
-
 def _run(args: argparse.Namespace) -> int:
     settings = Settings.from_env()
     enforce = args.enforce if args.enforce is not None else settings.enforce
-    orch, store, reporter = _build(
-        settings, args.policy, args.agent, args.max_iters, enforce, args.out
+    store = PolicyStore.load(args.policy)
+    reporter = Reporter(run_dir=args.out)
+    assessor = settings.build_assessor()
+
+    # Dynamic red team: generate candidate attacks from APE techniques, screen
+    # them against the detector, and add the evaders to the corpus.
+    if args.generate:
+        from .generator import generate_attacks
+        new = generate_attacks(
+            settings.build_generator(), assessor.detect, args.generate
+        )
+        assessor.add_tests(new)
+        print(f"generated {len(new)}/{args.generate} evasion attack(s) "
+              f"(APE-grounded, passed screening) → added to corpus: "
+              f"{', '.join(c.id for c in new) or 'none'}")
+
+    orch = SecurityOrchestrator(
+        sandbox=settings.build_sandbox(),
+        assessor=assessor,
+        llm=settings.build_llm(),
+        store=store,
+        reporter=reporter,
+        config=LoopConfig(agent=args.agent, max_iters=args.max_iters, enforce=enforce),
     )
     result = orch.run()
     print(reporter.summarize(result))
@@ -73,6 +79,9 @@ def main(argv: list[str] | None = None) -> int:
     run.add_argument("--out", default="runs/latest",
                      help="dir for traces + summary + report.html")
     run.add_argument("--save-policy", default=None, help="write hardened policy")
+    run.add_argument("--generate", type=int, default=0, metavar="N",
+                     help="dynamic red team: generate N APE-grounded attacks, "
+                          "screen them against the detector, add evaders to the corpus")
     enf = run.add_mutually_exclusive_group()
     enf.add_argument("--enforce", dest="enforce", action="store_true", default=None,
                      help="OpenShell enforces the policy (default)")
