@@ -19,7 +19,9 @@ class Settings:
 
     openshell_endpoint: str | None = None
     openshell_key: str | None = None
-    hiddenlayer_key: str | None = None
+    hiddenlayer_client_id: str | None = None
+    hiddenlayer_client_secret: str | None = None
+    hiddenlayer_env: str = "prod-us"
     hiddenlayer_project: str | None = None
     nemotron_base_url: str | None = None
     nemotron_key: str | None = None
@@ -36,7 +38,9 @@ class Settings:
             enforce=e.get("OPENSHELL_ENFORCE", "true").lower() not in ("false", "0", "off"),
             openshell_endpoint=e.get("OPENSHELL_ENDPOINT"),
             openshell_key=e.get("OPENSHELL_KEY"),
-            hiddenlayer_key=e.get("HIDDENLAYER_KEY"),
+            hiddenlayer_client_id=e.get("HIDDENLAYER_CLIENT_ID"),
+            hiddenlayer_client_secret=e.get("HIDDENLAYER_CLIENT_SECRET"),
+            hiddenlayer_env=e.get("HIDDENLAYER_ENV", "prod-us"),
             hiddenlayer_project=e.get("HIDDENLAYER_PROJECT"),
             nemotron_base_url=e.get("NEMOTRON_BASE_URL"),
             nemotron_key=e.get("NEMOTRON_KEY", "not-needed"),
@@ -55,7 +59,12 @@ class Settings:
         if self.assessor == "mock":
             return mock.MockAssessor()
         if self.assessor == "hiddenlayer":
-            return real.HiddenLayerAssessor(self.hiddenlayer_key, self.hiddenlayer_project)
+            return real.HiddenLayerAssessor(
+                self.hiddenlayer_client_id,
+                self.hiddenlayer_client_secret,
+                self.hiddenlayer_env,
+                self.hiddenlayer_project,
+            )
         raise ValueError(f"unknown ASSESSOR={self.assessor}")
 
     def build_llm(self) -> LLM:

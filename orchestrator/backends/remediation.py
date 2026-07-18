@@ -83,7 +83,9 @@ def build_recommendation(
         id=f"REG-{target.id}",
         category=target.category,
         severity=target.severity,
-        payload=f"regression guard for {target.id}",
+        # Reuse the real attack payload so the regression case is itself a live
+        # attack (a real detector re-checks it), not a placeholder string.
+        payload=target.attack_vector,
         requires_control=remedy["control"],
     )
     return Recommendation(

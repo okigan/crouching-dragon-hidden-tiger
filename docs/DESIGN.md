@@ -156,9 +156,12 @@ with zero setup. A `Settings` object is threaded through; no global state.
 
 ## 8. Out of scope (initial)
 
-Real OpenShell/HiddenLayer/Nemotron wiring is stubbed with clear `TODO` seams
-and credential guards; the mocks prove the architecture end-to-end first.
-(The Nemotron/vLLM adapter is now fully implemented — see README.)
+The **HiddenLayer** (Assessor) and **Nemotron/vLLM** (LLM) adapters are fully
+implemented against the live services (`orchestrator/backends/real.py`);
+HiddenLayer's prompt analyzer supplies real detections and the adapter is
+fail-closed. **OpenShell** (Sandbox) remains a credential-guarded seam. The
+mocks prove the architecture end-to-end with zero setup; real backends swap in
+via env without touching the loop.
 
 ## 9. Red/Blue co-evolution & the ablation control
 

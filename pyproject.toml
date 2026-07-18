@@ -11,6 +11,9 @@ dependencies = ["PyYAML>=6.0"]
 
 [project.optional-dependencies]
 dev = ["pytest>=8", "pytest-cov>=5"]
+hiddenlayer = [
+    "hiddenlayer-sdk>=3.8.0",
+]
 
 # Installed by default under `uv run` / `uv sync` (no --extra needed).
 [dependency-groups]
