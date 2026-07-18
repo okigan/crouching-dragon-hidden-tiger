@@ -69,7 +69,7 @@ class OpenShellSandbox:
         import uuid
         from .openshell_policy import to_openshell_yaml
 
-        name = f"cdht-{uuid.uuid4().hex[:8]}"
+        name = f"cdht-sandbox-{uuid.uuid4().hex[:8]}"
         r = self._cli("sandbox", "create", "--name", name, "--no-auto-providers",
                       timeout=self.create_timeout)
         if r.returncode != 0:

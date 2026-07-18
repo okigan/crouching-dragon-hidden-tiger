@@ -10,6 +10,9 @@
 # writes the report — all backends via .env. vLLM is cloud-hosted (macOS can't
 # run it locally). Mock backends are for the test suite, not deployment.
 
+# Clean project prefix (instead of the directory-derived "2026july").
+name: cdht
+
 services:
   # One-shot: generate the sandbox-JWT signing keys the gateway needs.
   # NOTE: the state dir is a HOST bind mount (not a named volume) so the gateway
@@ -17,6 +20,7 @@ services:
   # spawns via the Docker socket — a named volume breaks that sharing.
   openshell-jwt-init:
     image: ghcr.io/nvidia/openshell/gateway:latest
+    container_name: cdht-openshell-jwt-init
     user: "0"
     entrypoint:
       - /usr/local/bin/openshell-gateway
@@ -37,6 +41,7 @@ services:
   # the host Docker socket; enforces the loaded policy.yaml for real.
   openshell-gateway:
     image: ghcr.io/nvidia/openshell/gateway:latest
+    container_name: cdht-openshell-gateway
     command: []              # clear default CMD so gateway.toml bind wins
     user: "0"
     depends_on:
@@ -70,6 +75,8 @@ services:
   # can't run it locally — so there is no local vllm service.
   orchestrator:
     build: .
+    image: cdht-orchestrator
+    container_name: cdht-orchestrator
     depends_on:
       - openshell-gateway
     env_file:
