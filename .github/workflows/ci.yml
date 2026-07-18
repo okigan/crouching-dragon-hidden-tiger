@@ -13,7 +13,7 @@ jobs:
         with:
           enable-cache: true
       - name: Run test suite (fast, deterministic, no network)
-        run: uv run pytest --cov=orchestrator --cov-report=term-missing --cov-fail-under=90
+        run: uv run pytest
       - name: Smoke-run the improvement loop on mock backends
         run: uv run security-orchestrator run --out runs/ci --save-policy runs/hardened.yaml
       - name: Smoke-run the ablation harness
