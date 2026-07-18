@@ -156,7 +156,11 @@ class Policy:
         default_factory=lambda: {"allow": [], "deny": []}
     )
     prompt: dict[str, Any] = field(
-        default_factory=lambda: {"system_guard": False, "max_input_tokens": 4000}
+        default_factory=lambda: {
+            "system_guard": False,
+            "pii_redaction": False,
+            "max_input_tokens": 4000,
+        }
     )
 
     def copy(self) -> "Policy":
@@ -186,6 +190,8 @@ class Policy:
             active.add("network.default_deny")
         if self.prompt.get("system_guard"):
             active.add("prompt.system_guard")
+        if self.prompt.get("pii_redaction"):
+            active.add("prompt.pii_redaction")
         for tool in self.tools.get("deny", []):
             active.add(f"tools.deny:{tool}")
         return frozenset(active)

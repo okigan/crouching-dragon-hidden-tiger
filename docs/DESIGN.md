@@ -51,8 +51,11 @@ Red = the **red team** (attack); blue = the **blue team** (harden). See §9.
   allow-lists) so violations are observable without OpenShell.
 - **`Assessor`** — run adversarial assessments against a deployed agent.
   `assess(handle) -> Assessment` returning a list of `Finding`s
-  (id, category, severity, attack vector, evidence). Mock ships a fixed corpus
-  of attack cases (prompt-injection, data-exfil, tool-abuse, jailbreak).
+  (id, category, severity, attack vector, evidence). The corpus spans
+  data-exfiltration, tool-abuse, prompt-injection, PII-exfiltration, and
+  code-injection — each mapping to a distinct OpenShell control. The
+  HiddenLayer assessor sends each payload to the live prompt analyzer; the mock
+  evaluates them offline.
 - **`LLM`** — OpenAI-compatible chat completion.
   `analyze(assessment, policy) -> Recommendation` (root cause, proposed policy
   patch, new test cases). Mock uses rule-based heuristics keyed off finding

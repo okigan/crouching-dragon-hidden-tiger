@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import html
 import json
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -123,6 +124,59 @@ def _op_text(op: dict) -> str:
     return html.escape(f"{path} → {value}  ({kind})")
 
 
+def _op_summary(op: dict) -> str:
+    kind, path, value = op.get("op", ""), op.get("path", ""), op.get("value", "")
+    if kind in ("tool_deny",):
+        return f"tools.deny += {value}"
+    if kind in ("allow_add", "tool_allow"):
+        return f"{path} += {value}"
+    return f"{path} = {value}"
+
+
+_HL_LABEL = re.compile(r"HiddenLayer flagged \[([^\]]+)\]")
+
+
+def _policy_evolution(traces: list[dict]) -> str:
+    """A compact timeline of how the OpenShell policy was hardened, derived from
+    the applied remediations — each step shows the finding (and, when the live
+    detector ran, the HiddenLayer signal) that triggered the policy change."""
+    steps = []
+    for t in traces:
+        rec = t.get("remediation")
+        if not (rec and rec.get("ops")):
+            continue
+        v_before = t.get("policy_version", 1)
+        change = _op_summary(rec["ops"][0])
+        addr = ", ".join(rec.get("addresses", [])) or "—"
+        # find the addressed finding to show its category + HiddenLayer signal
+        cat, signal = "", ""
+        for f in t["findings"]:
+            if f["id"] in rec.get("addresses", []):
+                cat = f["category"]
+                m = _HL_LABEL.search(f["evidence"])
+                if m:
+                    signal = m.group(1)
+                break
+        sig_html = (
+            f'<span class="hl">HiddenLayer: {html.escape(signal)}</span>'
+            if signal else ""
+        )
+        steps.append(
+            f'<li><span class="ver">v{v_before}→v{v_before + 1}</span>'
+            f'<code class="chg">{html.escape(change)}</code>'
+            f'<span class="trig">{html.escape(addr)} · {html.escape(cat)}</span>'
+            f"{sig_html}</li>"
+        )
+    if not steps:
+        return ""
+    return (
+        '<div class="evolution"><h2>OpenShell policy evolution</h2>'
+        '<div class="evo-sub">permissive → hardened, one control per round, '
+        "each triggered by a finding</div>"
+        f'<ol class="evo">{"".join(steps)}</ol></div>'
+    )
+
+
 def _iteration_card(trace: dict) -> str:
     i = trace["iteration"]
     open_ids = trace["open"]
@@ -192,6 +246,7 @@ def _iteration_card(trace: dict) -> str:
 
 def _render_html(traces: list[dict], run: RunResult) -> str:
     cards = "".join(_iteration_card(t) for t in traces)
+    evolution = _policy_evolution(traces)
     converged = run.converged
     status_txt = "CONVERGED" if converged else "STOPPED"
     status_cls = "ok" if converged else "warn"
@@ -251,6 +306,21 @@ def _render_html(traces: list[dict], run: RunResult) -> str:
     height:48px; }}
   .trend .bar {{ width:14px; background:var(--accent); border-radius:3px 3px 0 0;
     min-height:3px; opacity:.85; }}
+  .evolution {{ border:1px solid var(--line); border-radius:12px; padding:14px 18px;
+    margin-bottom:26px; background:var(--card); }}
+  .evolution h2 {{ font-size:15px; margin:0 0 2px; }}
+  .evo-sub {{ color:var(--muted); font-size:12px; margin-bottom:10px; }}
+  ol.evo {{ list-style:none; margin:0; padding:0; }}
+  ol.evo li {{ display:flex; align-items:center; gap:10px; flex-wrap:wrap;
+    padding:6px 0; border-bottom:1px solid var(--line); font-size:13px; }}
+  ol.evo li:last-child {{ border-bottom:0; }}
+  .evo .ver {{ font-variant-numeric:tabular-nums; color:var(--muted);
+    min-width:64px; font-weight:600; }}
+  .evo .chg {{ background:rgba(47,189,107,.12); color:#2fbd6b; padding:1px 7px;
+    border-radius:5px; font-size:12px; }}
+  .evo .trig {{ color:var(--muted); }}
+  .evo .hl {{ margin-left:auto; font-size:11px; font-weight:600; padding:1px 8px;
+    border-radius:10px; background:#3a1418; color:#f0808f; }}
   .iter {{ border:1px solid var(--line); border-radius:12px; padding:14px 16px;
     margin-bottom:16px; background:var(--card); }}
   .iter-head {{ display:flex; align-items:center; gap:10px; margin-bottom:10px; }}
@@ -302,5 +372,6 @@ def _render_html(traces: list[dict], run: RunResult) -> str:
     <div class="metric"><b>v{final_v}</b><span>final policy</span></div>
     <div class="trend" title="exfil-success-rate per round">{bars}</div>
   </div>
+  {evolution}
   {cards}
 </div>"""
