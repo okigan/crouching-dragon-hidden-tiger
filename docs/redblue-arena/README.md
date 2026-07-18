@@ -1,19 +1,15 @@
 # redblue-arena — coworker plan (incorporated)
 
-Source: airdropped by a coworker (2026-07-18) — the hackathon-framed sibling of
-this platform (`organized-ai/redblue-arena`, AITX × NVIDIA Claw Agent
-Hackathon). The tarball was **scaffold + planning only** (the `services/*` dirs
-were one-line README stubs); the substantive content is preserved here:
-
-- `IMPLEMENTATION-MASTER-PLAN.md` — full plan, phases, track/bounty matrix.
-- `docker-compose.reference.yml` — their two-network topology (control-net
-  internal, data-net egress-open) illustrating the boundary invariant.
-- `CLAUDE.reference.md` — their project intent + boundary invariant statement.
+A coworker shared a hackathon-framed sibling of this platform
+(`organized-ai/redblue-arena`, AITX × NVIDIA Claw Agent Hackathon). Their raw
+plan and reference files are **kept out of this public repo** (they contain the
+coworker's own infrastructure identifiers and machine paths). What matters here
+is what we folded into our running code.
 
 ## What we folded into *this* platform
 
-The directly-applicable mechanics are now implemented in our running code (not
-just documented). See [../DESIGN.md](../DESIGN.md) §9.
+The directly-applicable mechanics are implemented in our code (not just
+documented). See [../DESIGN.md](../DESIGN.md) §9.
 
 | Their idea | Where it lives here |
 |------------|---------------------|
@@ -22,6 +18,10 @@ just documented). See [../DESIGN.md](../DESIGN.md) §9.
 | Ablation toggle `OPENSHELL_ENFORCE=on/off` | `LoopConfig.enforce` / `--enforce` / env `OPENSHELL_ENFORCE` |
 | Exfil-success-rate delta across rounds | `Assessment.success_rate`, `RunResult` delta, dashboard |
 | Recursive-Intelligence proof (enforce on vs off) | `python -m orchestrator ablate` |
+
+The two-network topology that illustrates the boundary invariant (control-net
+internal, data-net egress-open) is preserved as
+[`docker-compose.reference.yml`](docker-compose.reference.yml).
 
 ## Deliberately **not** incorporated (hackathon-specific infra)
 

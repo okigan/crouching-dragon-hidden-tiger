@@ -104,7 +104,7 @@ converges regardless of how small or slow the model is.
 
 ```bash
 export LLM=nemotron
-export NEMOTRON_BASE_URL=http://REDACTED-VLLM-HOST:8000
+export NEMOTRON_BASE_URL=http://YOUR_VLLM_HOST:8000
 export NEMOTRON_MODEL=Qwen/Qwen2.5-0.5B-Instruct
 export NEMOTRON_KEY=<your-key>          # export, don't commit
 uv run security-orchestrator run --out runs/live
