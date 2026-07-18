@@ -65,16 +65,19 @@ APE_OBJECTIVES = {
 
 
 def ape_refs(technique: str = "", objective: str = "") -> tuple[DocRef, ...]:
-    """DocRefs for a case's APE technique (how) and objective (what)."""
+    """DocRefs for a case's APE technique (how) and objective (what). Names come
+    from the vendored taxonomy when present, else the built-in fallback map."""
+    from . import ape  # local import to avoid a cycle at module load
+
     refs: list[DocRef] = []
+    t_name = ape.technique_name(technique) or APE_TECHNIQUES.get(technique)
+    o_name = ape.objective_name(objective) or APE_OBJECTIVES.get(objective)
     # Distinct anchors per ID so technique + objective aren't deduped as one URL
     # (the SPA ignores the fragment; the base site still resolves).
-    if technique in APE_TECHNIQUES:
-        refs.append(DocRef("APE technique", technique, APE_TECHNIQUES[technique],
-                           f"{_APE}#{technique}"))
-    if objective in APE_OBJECTIVES:
-        refs.append(DocRef("APE objective", objective, APE_OBJECTIVES[objective],
-                           f"{_APE}#{objective}"))
+    if t_name:
+        refs.append(DocRef("APE technique", technique, t_name, f"{_APE}#{technique}"))
+    if o_name:
+        refs.append(DocRef("APE objective", objective, o_name, f"{_APE}#{objective}"))
     return tuple(refs)
 
 # Our finding categories → the canonical framework entries they correspond to.
