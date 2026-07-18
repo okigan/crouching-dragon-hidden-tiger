@@ -15,7 +15,7 @@ def test_mocks_satisfy_protocols():
 
 
 def test_real_adapters_satisfy_protocols_when_configured():
-    sb = real.OpenShellSandbox("https://openshell.local", "key")
+    sb = real.OpenShellSandbox("http://gateway:8080")
     assessor = real.HiddenLayerAssessor("hl-client-id", "hl-client-secret")
     llm = real.NemotronLLM("http://vllm:8000")
     assert isinstance(sb, Sandbox)
@@ -41,7 +41,7 @@ def test_config_defaults_to_mock():
 
 def test_config_selects_real_backends():
     s = Settings.from_env(env={
-        "SANDBOX": "openshell", "OPENSHELL_ENDPOINT": "x", "OPENSHELL_KEY": "y",
+        "SANDBOX": "openshell", "OPENSHELL_GATEWAY_ENDPOINT": "http://gw:8080",
         "ASSESSOR": "hiddenlayer",
         "HIDDENLAYER_CLIENT_ID": "cid", "HIDDENLAYER_CLIENT_SECRET": "sec",
         "LLM": "nemotron", "NEMOTRON_BASE_URL": "http://vllm:8000",

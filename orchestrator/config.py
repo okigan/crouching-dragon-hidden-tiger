@@ -17,8 +17,8 @@ class Settings:
     llm: str = "mock"
     enforce: bool = True  # OPENSHELL_ENFORCE ablation toggle
 
-    openshell_endpoint: str | None = None
-    openshell_key: str | None = None
+    openshell_gateway_endpoint: str | None = None
+    openshell_insecure: bool = True
     hiddenlayer_client_id: str | None = None
     hiddenlayer_client_secret: str | None = None
     hiddenlayer_env: str = "prod-us"
@@ -36,8 +36,9 @@ class Settings:
             assessor=e.get("ASSESSOR", "mock"),
             llm=e.get("LLM", "mock"),
             enforce=e.get("OPENSHELL_ENFORCE", "true").lower() not in ("false", "0", "off"),
-            openshell_endpoint=e.get("OPENSHELL_ENDPOINT"),
-            openshell_key=e.get("OPENSHELL_KEY"),
+            openshell_gateway_endpoint=e.get("OPENSHELL_GATEWAY_ENDPOINT"),
+            openshell_insecure=e.get("OPENSHELL_GATEWAY_INSECURE", "true").lower()
+            not in ("false", "0", "off"),
             hiddenlayer_client_id=e.get("HIDDENLAYER_CLIENT_ID"),
             hiddenlayer_client_secret=e.get("HIDDENLAYER_CLIENT_SECRET"),
             hiddenlayer_env=e.get("HIDDENLAYER_ENV", "prod-us"),
@@ -52,7 +53,9 @@ class Settings:
         if self.sandbox == "mock":
             return mock.MockSandbox()
         if self.sandbox == "openshell":
-            return real.OpenShellSandbox(self.openshell_endpoint, self.openshell_key)
+            return real.OpenShellSandbox(
+                self.openshell_gateway_endpoint, self.openshell_insecure
+            )
         raise ValueError(f"unknown SANDBOX={self.sandbox}")
 
     def build_assessor(self) -> Assessor:
