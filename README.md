@@ -1,11 +1,12 @@
 # Crouching Dragon Hidden Tiger
 
-**An AI security lab that hardens an agent's runtime policy until attacks stop working — automatically, and proves it.**
+**An AI security lab that hardens an agent's NVIDIA OpenShell runtime policy until attacks stop working — automatically, and proves it.**
 
-You start with a permissively-configured AI agent. A red team attacks it, a blue
-team (an LLM) reads each failure and tightens the runtime policy, and the cycle
-repeats until no attack lands. The result is a **hardened policy** plus a
-**measured before/after** you can put in front of anyone.
+You start with a permissively-configured AI agent running under an [NVIDIA
+OpenShell](docs/PLAN.md) sandbox. A red team attacks it, a blue team (an LLM)
+reads each failure and tightens the OpenShell policy, and the cycle repeats until
+no attack lands. The result is a **hardened OpenShell policy** plus a **measured
+before/after** you can put in front of anyone.
 
 ## What you get from one run
 
@@ -13,9 +14,10 @@ repeats until no attack lands. The result is a **hardened policy** plus a
 uv run security-orchestrator run
 ```
 
-- **A hardened policy.** The starting policy (open egress, `shell_exec` allowed,
-  no injection guard) is rewritten into one that denies egress by default, drops
-  the dangerous tool, and enables the prompt guard — saved to `runs/latest/`.
+- **A hardened OpenShell policy.** The starting policy (open egress, `shell_exec`
+  allowed, no injection guard) is rewritten into one that denies egress by
+  default, drops the dangerous tool, and enables the prompt guard — saved to
+  `runs/latest/`.
 - **A headline result: exfil-success-rate 100% → 0%.** Every attack lands at the
   start; none land at the end. That drop is the whole point.
 - **A visual report** (`runs/latest/report.html`) showing every round: what was
@@ -34,8 +36,9 @@ deterministic heuristic so the run is reproducible with zero setup.*
 
 ## The proof it isn't cheating: the ablation
 
-The runtime sandbox is the **sole guard** — an attack is stopped by the policy,
-not by the harness. Run the same loop with enforcement ON vs OFF:
+The NVIDIA OpenShell sandbox is the **sole guard** — an attack is stopped by the
+OpenShell policy, not by the harness. Run the same loop with enforcement ON vs
+OFF:
 
 ```bash
 uv run security-orchestrator ablate
@@ -54,11 +57,11 @@ gap is the recursive-intelligence signal.
 
 A red-team / blue-team co-evolution loop. Each round:
 
-1. **Deploy** the agent under the current policy in the sandbox.
+1. **Deploy** the agent under the current OpenShell policy in the sandbox.
 2. **Attack (red).** An assessor runs an adversarial corpus — data-exfiltration,
    tool-abuse, prompt-injection — and reports which attacks landed.
-3. **Analyze (blue).** An LLM root-causes the worst finding and proposes a policy
-   patch (validated so it only ever tightens).
+3. **Analyze (blue).** An LLM root-causes the worst finding and proposes an
+   OpenShell policy patch (validated so it only ever tightens).
 4. **Patch & re-test.** Apply the patch, add a regression test, run again.
 5. **Stop** when no attack lands (converged), or the findings stall.
 
