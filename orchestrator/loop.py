@@ -18,6 +18,21 @@ from .policy_store import PolicyStore
 class LoopConfig:
     agent: str = "target-agent"
     max_iters: int = 10
+    # Ablation toggle (redblue-arena "OPENSHELL_ENFORCE"). When False the sandbox
+    # does not enforce the policy — blue still learns and patches, but the guard
+    # never takes effect, so exfil-success-rate stays flat. This is the control
+    # that proves the policy (not Docker/the harness) is what stops the attacks.
+    enforce: bool = True
+
+
+def _unenforced(policy: Policy) -> Policy:
+    """The policy as the target experiences it when enforcement is off: every
+    control disabled, so all attacks land regardless of what blue wrote."""
+    p = policy.copy()
+    p.network["default"] = "allow"
+    p.tools["deny"] = []
+    p.prompt["system_guard"] = False
+    return p
 
 
 class SecurityOrchestrator:
@@ -38,14 +53,19 @@ class SecurityOrchestrator:
         self.config = config or LoopConfig()
 
     def run(self) -> RunResult:
-        result = RunResult()
+        result = RunResult(enforce=self.config.enforce)
         prev_open: frozenset[str] | None = None
 
         for i in range(self.config.max_iters):
             policy: Policy = self.store.current
             handle = self.sandbox.deploy(self.config.agent, policy)
             try:
-                assessment = self.assessor.assess(handle, policy)
+                # The sandbox (OpenShell) is the sole guard: when enforcement is
+                # off, the target experiences an unguarded policy and every
+                # attack lands, no matter what blue has written.
+                effective = policy if self.config.enforce else _unenforced(policy)
+                assessment = self.assessor.assess(handle, effective)
+                result.success_rates.append(assessment.success_rate())
                 open_before = assessment.open_ids()
 
                 # Convergence: nothing left to fix.

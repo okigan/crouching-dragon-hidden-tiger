@@ -1,0 +1,42 @@
+# redblue-arena — two networks by design.
+# control-net isolates the plane we are NOT judged on.
+# data-net egress is INTENTIONALLY open so the ONLY guard on target->sink is the
+# OpenShell policy, not Docker. See CLAUDE.md BOUNDARY INVARIANT.
+services:
+  controller:
+    build: ./services/controller
+    env_file: .env
+    volumes: ["./shared:/shared", "./policy:/policy"]
+    networks: [control-net]
+
+  red-team:
+    build: ./services/red
+    env_file: .env
+    volumes: ["./shared:/shared"]
+    networks: [control-net]
+
+  blue-team:
+    build: ./services/blue
+    env_file: .env
+    volumes: ["./shared:/shared", "./policy:/policy"]
+    networks: [control-net]
+
+  target:
+    build: ./services/target
+    env_file: .env
+    volumes: ["./shared:/shared", "./policy:/policy:ro"]
+    secrets: [seeded_creds]
+    networks: [control-net, data-net]   # reachable by red; can egress to sink via data-net
+
+  attacker-sink:
+    build: ./services/sink
+    networks: [data-net]
+
+secrets:
+  seeded_creds:
+    file: ./services/target/seeded_creds.json
+
+networks:
+  control-net:
+    internal: true          # legitimate stack isolation
+  data-net: {}              # egress OPEN on purpose — OpenShell is the guard

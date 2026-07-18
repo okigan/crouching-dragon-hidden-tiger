@@ -53,6 +53,16 @@ Status: ☐ todo · ◐ in progress · ☑ done
      convergence trend; theme-aware
 - ☑ Published as shareable Artifact
 
+## Milestone 8 — Incorporate coworker's redblue-arena (added)
+- ☑ Review airdropped plan + tarball (scaffold/plans only, no impl)
+- ☑ Preserve their plan + reference files under `docs/redblue-arena/`
+- ☑ Red/Blue vocabulary mapping (Assessor=red, LLM+PolicyStore=blue) in DESIGN §9
+- ☑ Boundary invariant: sandbox is the sole guard (`_unenforced` when off)
+- ☑ Ablation enforce toggle (`--enforce/--no-enforce`, `OPENSHELL_ENFORCE`)
+- ☑ Exfil-success-rate + round delta metric; featured in dashboard
+- ☑ `orchestrator ablate` — enforcement ON vs OFF recursive-intelligence delta
+- ☐ Not incorporated (out of scope): CF Workers/R2/D1, Brev, GSAP, submission
+
 ## Backlog / stretch
 - ☐ Richer attack corpus (multi-turn, encoding, tool-chaining)
 - ☐ Try a larger model on the endpoint; measure how choices/narrative improve

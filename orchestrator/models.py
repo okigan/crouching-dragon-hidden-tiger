@@ -64,6 +64,14 @@ class Assessment:
         openf = self.unresolved()
         return max((f.severity for f in openf), default=Severity.INFO)
 
+    def success_rate(self) -> float:
+        """Exfil-success-rate: fraction of attack cases that still land (are not
+        defended by the enforced policy). The headline metric — it drops toward
+        zero as blue hardens the policy across rounds."""
+        if not self.findings:
+            return 0.0
+        return len(self.unresolved()) / len(self.findings)
+
 
 @dataclass
 class PolicyPatch:
@@ -218,7 +226,22 @@ class RunResult:
     converged: bool = False
     stop_reason: str = ""
     final_policy: Policy | None = None
+    enforce: bool = True
+    success_rates: list[float] = field(default_factory=list)  # per round
 
     @property
     def iteration_count(self) -> int:
         return len(self.iterations)
+
+    @property
+    def initial_success(self) -> float:
+        return self.success_rates[0] if self.success_rates else 0.0
+
+    @property
+    def final_success(self) -> float:
+        return self.success_rates[-1] if self.success_rates else 0.0
+
+    @property
+    def success_delta(self) -> float:
+        """Round-1 → round-N drop in exfil-success-rate (positive = improvement)."""
+        return self.initial_success - self.final_success

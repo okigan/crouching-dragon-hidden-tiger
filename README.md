@@ -63,6 +63,29 @@ python -m orchestrator run --out runs/latest --save-policy runs/hardened.yaml
 open runs/latest/report.html
 ```
 
+## Red/Blue co-evolution & the ablation proof
+
+The loop is a two-sided co-evolution (vocabulary from a coworker's
+[redblue-arena](docs/redblue-arena/README.md) plan, folded in here): the
+**Assessor is the red team** (attacks, produces findings) and the
+**LLM + PolicyStore are the blue team** (root-causes, hardens the policy). The
+**Sandbox is the sole guard** — whether an attack lands is decided by the
+enforced policy, not the harness.
+
+The headline metric is **exfil-success-rate** (fraction of attacks that still
+land) and its round-1 → round-N drop. The ablation runs enforcement ON vs OFF
+from the same start — the control that proves the *policy* stops the attacks:
+
+```bash
+python -m orchestrator ablate --out runs/ablation
+# ON  : 100% → 0%  (blue hardens, attacks blocked)
+# OFF : 100% → 100% (blue still patches, but enforcement disabled → no effect)
+# recursive-intelligence delta = +100%
+```
+
+Single runs take `--no-enforce` (or `OPENSHELL_ENFORCE=false`) for the ablation
+arm; every dashboard shows the exfil-rate curve and enforcement badge.
+
 ## Optionally driving it with a live LLM (vLLM / Nemotron)
 
 The `LLM` backend is optional and defaults to a deterministic mock. Point it at

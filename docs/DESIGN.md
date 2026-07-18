@@ -128,3 +128,35 @@ with zero setup. A `Settings` object is threaded through; no global state.
 
 Real OpenShell/HiddenLayer/Nemotron wiring is stubbed with clear `TODO` seams
 and credential guards; the mocks prove the architecture end-to-end first.
+(The Nemotron/vLLM adapter is now fully implemented — see README.)
+
+## 9. Red/Blue co-evolution & the ablation control
+
+Adopted from a coworker's `redblue-arena` plan
+([redblue-arena/](redblue-arena/README.md)). We fold in the mechanics that apply
+to our runnable lab, not the hackathon cloud infra.
+
+**Vocabulary.** The loop is a two-sided co-evolution:
+- **Red team** = the `Assessor` (HiddenLayer). It attacks the deployed agent and
+  produces findings.
+- **Blue team** = the `LLM` (Nemotron) + `PolicyStore`. It reads the findings,
+  reasons about root cause, and hardens the policy — one finding per round.
+
+**Boundary invariant.** The `Sandbox` (OpenShell) is the *sole* guard: whether
+an attack lands is decided by the enforced policy, not by the harness. Our
+`MockSandbox` honors this — with enforcement off, the target experiences an
+unguarded policy (`loop._unenforced`) and every attack succeeds regardless of
+what blue wrote.
+
+**Ablation toggle (`enforce`).** `LoopConfig.enforce` / `--no-enforce` / env
+`OPENSHELL_ENFORCE=false`. The control that proves the policy is what stops the
+attacks: blue still learns and patches, but with enforcement off the guard never
+takes effect.
+
+**Exfil-success-rate & recursive-intelligence delta.**
+`Assessment.success_rate()` = fraction of attack cases that still land. The loop
+records it per round; `RunResult.success_delta` is the round-1 → round-N drop.
+`orchestrator ablate` runs enforcement ON vs OFF from the same start and reports
+the difference (enforced drops to 0%, ablated stays flat) — the headline
+"recursive intelligence" signal. Both the per-run dashboard and the ablation
+report surface it.

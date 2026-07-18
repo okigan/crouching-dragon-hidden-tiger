@@ -51,6 +51,7 @@ class Reporter:
         trace = {
             "iteration": index,
             "policy_version": policy.version,
+            "success_rate": round(assessment.success_rate(), 3),
             "findings": [
                 {
                     "id": f.id,
@@ -78,6 +79,9 @@ class Reporter:
             f"- Iterations: {run.iteration_count}",
             f"- Converged: {'yes' if run.converged else 'no'}",
             f"- Stop reason: {run.stop_reason}",
+            f"- Enforcement: {'ON' if run.enforce else 'OFF (ablation)'}",
+            f"- Exfil-success-rate: {run.initial_success:.0%} → {run.final_success:.0%} "
+            f"(delta {run.success_delta:+.0%})",
         ]
         if run.final_policy:
             lines.append(f"- Final policy version: {run.final_policy.version}")
@@ -193,15 +197,19 @@ def _render_html(traces: list[dict], run: RunResult) -> str:
     status_cls = "ok" if converged else "warn"
     final_v = run.final_policy.version if run.final_policy else "—"
     generated = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
-
-    # trend sparkline of open findings per iteration
-    open_series = [len(t["open"]) for t in traces]
-    max_open = max(open_series) if open_series else 1
-    bars = "".join(
-        f'<div class="bar" style="height:{(n / max_open) * 100 if max_open else 0:.0f}%" '
-        f'title="iter {idx}: {n} open"></div>'
-        for idx, n in enumerate(open_series)
+    enforce_badge = (
+        '<span class="enf on">enforcement ON</span>' if run.enforce
+        else '<span class="enf off">enforcement OFF · ablation</span>'
     )
+
+    # exfil-success-rate curve per round (the headline metric)
+    rates = [t.get("success_rate", 0.0) for t in traces]
+    bars = "".join(
+        f'<div class="bar" style="height:{r * 100:.0f}%" '
+        f'title="round {idx}: {r:.0%} exfil success"></div>'
+        for idx, r in enumerate(rates)
+    )
+    delta = run.success_delta
 
     return f"""<title>AI Security Validation — Run Report</title>
 <style>
@@ -227,6 +235,10 @@ def _render_html(traces: list[dict], run: RunResult) -> str:
     padding:3px 10px; border-radius:20px; font-size:12px; }}
   .status.ok {{ background:#12321f; color:#5fdd91; }}
   .status.warn {{ background:#3a2410; color:#f0a860; }}
+  .enf {{ font-size:11px; font-weight:600; padding:1px 7px; border-radius:10px; }}
+  .enf.on {{ background:#12321f; color:#5fdd91; }}
+  .enf.off {{ background:#3a1418; color:#f0808f; }}
+  .delta {{ color:#2fbd6b; }}
   .summary {{ display:flex; gap:22px; flex-wrap:wrap; align-items:flex-end;
     background:var(--card); border:1px solid var(--line); border-radius:12px;
     padding:16px 18px; margin-bottom:26px; }}
@@ -280,12 +292,13 @@ def _render_html(traces: list[dict], run: RunResult) -> str:
   <div class="sub">Generated {generated}</div>
   <div class="summary">
     <div class="metric"><b><span class="status {status_cls}">{status_txt}</span></b>
-      <span>{html.escape(run.stop_reason)}</span></div>
-    <div class="metric"><b>{run.iteration_count}</b><span>iterations</span></div>
+      <span>{enforce_badge}</span></div>
+    <div class="metric"><b>{run.initial_success:.0%} → {run.final_success:.0%}</b>
+      <span>exfil-success-rate</span></div>
+    <div class="metric"><b class="delta">{delta:+.0%}</b><span>Δ recursive-intel</span></div>
+    <div class="metric"><b>{run.iteration_count}</b><span>rounds</span></div>
     <div class="metric"><b>v{final_v}</b><span>final policy</span></div>
-    <div class="metric"><b>{open_series[0] if open_series else 0} → {open_series[-1] if open_series else 0}</b>
-      <span>open findings</span></div>
-    <div class="trend">{bars}</div>
+    <div class="trend" title="exfil-success-rate per round">{bars}</div>
   </div>
   {cards}
 </div>"""

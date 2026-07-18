@@ -15,6 +15,7 @@ class Settings:
     sandbox: str = "mock"
     assessor: str = "mock"
     llm: str = "mock"
+    enforce: bool = True  # OPENSHELL_ENFORCE ablation toggle
 
     openshell_endpoint: str | None = None
     openshell_key: str | None = None
@@ -32,6 +33,7 @@ class Settings:
             sandbox=e.get("SANDBOX", "mock"),
             assessor=e.get("ASSESSOR", "mock"),
             llm=e.get("LLM", "mock"),
+            enforce=e.get("OPENSHELL_ENFORCE", "true").lower() not in ("false", "0", "off"),
             openshell_endpoint=e.get("OPENSHELL_ENDPOINT"),
             openshell_key=e.get("OPENSHELL_KEY"),
             hiddenlayer_key=e.get("HIDDENLAYER_KEY"),
