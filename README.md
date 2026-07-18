@@ -1,158 +1,101 @@
 # Crouching Dragon Hidden Tiger
 
-*AI Security Validation Platform.*
+**An AI security lab that hardens an agent's runtime policy until attacks stop working — automatically, and proves it.**
 
-A reproducible AI security lab that **continuously evaluates and improves the
-security posture of AI agents**. It runs a closed loop: deploy an agent under a
-runtime policy, attack it, have an LLM root-cause the failures and propose
-policy hardening, re-attack, and repeat until no vulnerabilities remain.
+You start with a permissively-configured AI agent. A red team attacks it, a blue
+team (an LLM) reads each failure and tightens the runtime policy, and the cycle
+repeats until no attack lands. The result is a **hardened policy** plus a
+**measured before/after** you can put in front of anyone.
 
-Implements [docs/PLAN.md](docs/PLAN.md); architecture in [docs/DESIGN.md](docs/DESIGN.md);
-status in [TODO.md](TODO.md).
-
-## The four components
-
-| Plan component | Role | This repo |
-|----------------|------|-----------|
-| NVIDIA OpenShell | Sandboxed agent execution + policy enforcement | `Sandbox` adapter |
-| HiddenLayer | Adversarial assessment / vuln discovery | `Assessor` adapter |
-| Nemotron on vLLM | OpenAI-compatible reasoning + recommendations | `LLM` adapter |
-| Security Orchestrator | Drives the improvement loop | **built here** (`orchestrator/`) |
-
-Three of the four are gated (commercial key / NVIDIA access / GPU). Every one
-sits behind a narrow `Protocol` with a **deterministic mock** (default, runs
-anywhere) and a **real adapter** guarded by credentials. The orchestrator and
-tests depend only on the interfaces — so `git clone && pytest` exercises the
-entire loop with zero setup, and real backends swap in via env with no code
-changes.
-
-## Quickstart
-
-Uses [uv](https://docs.astral.sh/uv/) — it creates an isolated env and installs
-deps from the lockfile automatically, so there's nothing to `pip install`.
+## What you get from one run
 
 ```bash
-uv run pytest                    # 29 tests, deterministic, no network, <1s
-uv run security-orchestrator run # start from the permissive policy, mock backends
-open runs/latest/report.html     # visual progress dashboard
+uv run security-orchestrator run
 ```
 
-> No uv? The plain-Python path still works if PyYAML is installed:
-> `python3 -m orchestrator run`. All commands below show the uv form.
+- **A hardened policy.** The starting policy (open egress, `shell_exec` allowed,
+  no injection guard) is rewritten into one that denies egress by default, drops
+  the dangerous tool, and enables the prompt guard — saved to `runs/latest/`.
+- **A headline result: exfil-success-rate 100% → 0%.** Every attack lands at the
+  start; none land at the end. That drop is the whole point.
+- **A visual report** (`runs/latest/report.html`) showing every round: what was
+  attacked, what the blue team changed, and the curve to zero.
+- **A recursive-intelligence delta** proving the *policy* did the work, not the
+  test harness (see the ablation below).
 
-Example run — the permissive starting policy has 3 planted weaknesses; the loop
-hardens it one finding at a time:
+### The report it produces
 
-```
-| # | patched | open before | open after | max severity |
-|---|---------|-------------|------------|--------------|
-| 0 | yes     | 3           | 0          | critical     |   # egress default-allow -> deny
-| 1 | yes     | 2           | 0          | high         |   # shell_exec -> denied
-| 2 | yes     | 1           | 0          | high         |   # system_guard -> on
-| 3 | no      | 0           | 0          | info         |   # converged
-```
+![Sample run report — permissive policy hardened to convergence over 4 rounds](docs/sample-report.png)
 
-Write traces + a hardened policy:
+*Each round: the findings discovered (severity + OPEN/defended), the remediation
+the blue team applied to the policy, and the exfil-success-rate trending to zero.
+With a live LLM the remediation is tagged `nemotron`; the default uses a
+deterministic heuristic so the run is reproducible with zero setup.*
+
+## The proof it isn't cheating: the ablation
+
+The runtime sandbox is the **sole guard** — an attack is stopped by the policy,
+not by the harness. Run the same loop with enforcement ON vs OFF:
 
 ```bash
-uv run security-orchestrator run --out runs/latest --save-policy runs/hardened.yaml
+uv run security-orchestrator ablate
 ```
 
-## Visual progress dashboard
+| enforcement | exfil-success start → end | delta |
+|-------------|---------------------------|-------|
+| **ON**  | 100% → 0%   | **−100%** |
+| **OFF** | 100% → 100% | 0% |
 
-Every run writes a self-contained `report.html` (theme-aware, no external deps)
-to the `--out` dir. It shows, per iteration: the findings discovered with
-severity badges and OPEN/defended state, the analysis (root cause + which
-backend produced it + latency), the remediation applied to the policy, and a
-trend of open findings converging to zero.
+With enforcement OFF the blue team still learns and patches, but the guard never
+takes effect, so attacks keep landing. Only the enforced run drops to zero — the
+gap is the recursive-intelligence signal.
+
+## How it works
+
+A red-team / blue-team co-evolution loop. Each round:
+
+1. **Deploy** the agent under the current policy in the sandbox.
+2. **Attack (red).** An assessor runs an adversarial corpus — data-exfiltration,
+   tool-abuse, prompt-injection — and reports which attacks landed.
+3. **Analyze (blue).** An LLM root-causes the worst finding and proposes a policy
+   patch (validated so it only ever tightens).
+4. **Patch & re-test.** Apply the patch, add a regression test, run again.
+5. **Stop** when no attack lands (converged), or the findings stall.
+
+It maps onto the four-component security stack from the original brief
+([docs/PLAN.md](docs/PLAN.md)):
+
+| Component | Role | Here |
+|-----------|------|------|
+| NVIDIA OpenShell | Sandboxed execution + policy enforcement (the sole guard) | `Sandbox` |
+| HiddenLayer | Adversarial assessment (the red team) | `Assessor` |
+| Nemotron on vLLM | Reasoning that proposes fixes (the blue team) | `LLM` |
+| Security Orchestrator | Drives the loop | built here |
+
+Each sits behind an interface with a **deterministic mock** (default, runs
+anywhere with no credentials) and a **real adapter** that swaps in via env — so
+the whole thing runs offline out of the box, and connects to the real services
+when you have them.
+
+## Try it
 
 ```bash
 uv run security-orchestrator run --out runs/latest --save-policy runs/hardened.yaml
 open runs/latest/report.html
 ```
 
-## Red/Blue co-evolution & the ablation proof
-
-The loop is a two-sided co-evolution (vocabulary from a coworker's
-[redblue-arena](docs/redblue-arena/README.md) plan, folded in here): the
-**Assessor is the red team** (attacks, produces findings) and the
-**LLM + PolicyStore are the blue team** (root-causes, hardens the policy). The
-**Sandbox is the sole guard** — whether an attack lands is decided by the
-enforced policy, not the harness.
-
-The headline metric is **exfil-success-rate** (fraction of attacks that still
-land) and its round-1 → round-N drop. The ablation runs enforcement ON vs OFF
-from the same start — the control that proves the *policy* stops the attacks:
+Point it at a real vLLM/Nemotron endpoint to have an actual model drive the blue
+team (optional — falls back to the heuristic if the model returns anything
+unusable, so the loop always converges):
 
 ```bash
-uv run security-orchestrator ablate --out runs/ablation
-# ON  : 100% → 0%  (blue hardens, attacks blocked)
-# OFF : 100% → 100% (blue still patches, but enforcement disabled → no effect)
-# recursive-intelligence delta = +100%
-```
-
-Single runs take `--no-enforce` (or `OPENSHELL_ENFORCE=false`) for the ablation
-arm; every dashboard shows the exfil-rate curve and enforcement badge.
-
-## Optionally driving it with a live LLM (vLLM / Nemotron)
-
-The `LLM` backend is optional and defaults to a deterministic mock. Point it at
-any OpenAI-compatible vLLM endpoint and the model will **propose which finding
-to fix and narrate the root cause**; its choice is validated against known
-remediations and **falls back to the heuristic when unusable** — so the loop
-converges regardless of how small or slow the model is.
-
-```bash
-export LLM=nemotron
-export NEMOTRON_BASE_URL=http://YOUR_VLLM_HOST:8000
-export NEMOTRON_MODEL=Qwen/Qwen2.5-0.5B-Instruct
-export NEMOTRON_KEY=<your-key>          # export, don't commit
+export LLM=nemotron NEMOTRON_BASE_URL=http://YOUR_VLLM_HOST:8000 \
+       NEMOTRON_MODEL=<served-model-id> NEMOTRON_KEY=<key>
 uv run security-orchestrator run --out runs/live
 ```
 
-In the dashboard, LLM-driven iterations are tagged `nemotron · <latency>ms`;
-fallbacks are tagged `nemotron-fallback`. Tune `NEMOTRON_TIMEOUT` (seconds) if
-the endpoint is slow — a timeout falls back rather than failing the run.
+## More
 
-## Using the other real services
-
-Copy `.env.example` to `.env` and set backends + credentials:
-
-```bash
-SANDBOX=openshell   OPENSHELL_ENDPOINT=... OPENSHELL_KEY=...
-ASSESSOR=hiddenlayer HIDDENLAYER_KEY=...
-```
-
-OpenShell and HiddenLayer wiring lives in `orchestrator/backends/real.py` as
-credential-guarded seams (clearly marked `TODO`); the Nemotron/vLLM adapter in
-that file is fully implemented. See [docs/DESIGN.md §8](docs/DESIGN.md).
-
-## Deployment
-
-```bash
-docker compose up --build orchestrator      # self-contained (mocks)
-docker compose --profile gpu up vllm        # opt-in Nemotron endpoint (GPU)
-```
-
-## Layout
-
-```
-orchestrator/
-  models.py        domain types (Policy, Finding, PolicyPatch, ...)
-  interfaces.py    Sandbox / Assessor / LLM / Reporter Protocols
-  loop.py          the improvement loop (deploy->assess->analyze->patch)
-  policy_store.py  versioned load/save/apply/rollback/diff
-  reporter.py      per-iteration traces + Markdown summary
-  config.py        env -> backend resolution (mock defaults)
-  backends/        mock.py (default) · real.py (guarded stubs) · corpus.py
-policies/          baseline.yaml (intentionally under-hardened)
-tests/             unit · integration · contract (95% coverage)
-```
-
-## Development
-
-```bash
-make test    # pytest
-make cov     # coverage report
-make run     # run the loop, write runs/
-```
+- **Design & diagrams:** [docs/DESIGN.md](docs/DESIGN.md)
+- **Development, testing, config, deployment:** [DEVELOP.md](DEVELOP.md)
+- **The original brief:** [docs/PLAN.md](docs/PLAN.md)
