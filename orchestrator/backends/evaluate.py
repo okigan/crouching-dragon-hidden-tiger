@@ -12,6 +12,7 @@ the blue team must fix by hardening OpenShell — the detection gaps.
 from __future__ import annotations
 
 from ..models import AttackCase, DocRef, Finding, Policy
+from ..references import ape_refs
 
 
 def evaluate(
@@ -38,6 +39,10 @@ def evaluate(
     else:
         status = "caught by OpenShell (evaded HiddenLayer)"
 
+    # Ground the finding in the APE technique/objective this attack uses, on top
+    # of the detector-supplied OWASP/MITRE references.
+    all_refs = tuple(references) + ape_refs(case.ape_technique, case.ape_objective)
+
     return Finding(
         id=case.id,
         category=case.category,
@@ -45,7 +50,7 @@ def evaluate(
         attack_vector=case.payload,
         evidence=f"{hl_note}; {os_note} — {status}",
         resolved=resolved,
-        references=references,
+        references=all_refs,
         hl_detected=hl_detected,
         openshell_blocked=blocked,
     )
