@@ -9,6 +9,7 @@ Backends are resolved from config, so the loop never imports these directly.
 from __future__ import annotations
 
 import json
+import os
 import re
 import time
 import urllib.error
@@ -32,21 +33,64 @@ class MissingCredentials(RuntimeError):
 
 
 class OpenShellSandbox:
-    """NVIDIA OpenShell secure execution environment."""
+    """Real NVIDIA OpenShell secure execution environment.
 
-    def __init__(self, endpoint: str | None, api_key: str | None) -> None:
-        if not endpoint or not api_key:
-            raise MissingCredentials("OpenShell requires endpoint + api key")
-        self.endpoint = endpoint
-        self.api_key = api_key
+    Drives the `openshell` CLI against a running gateway: creates a sandbox,
+    translates our Policy into a real OpenShell policy.yaml and loads it, and can
+    exec commands inside the sandbox. Enforcement (egress / filesystem / process)
+    is real — seccomp / Landlock / network namespaces via the gateway.
 
-    def deploy(self, agent: str, policy: Policy) -> str:  # pragma: no cover
-        # TODO: translate Policy -> OpenShell sandbox spec, POST to endpoint,
-        # return the sandbox/session id.
-        raise NotImplementedError("OpenShell live deploy not yet wired")
+    Needs the `openshell` CLI on PATH (`uv tool install openshell`) and a gateway
+    endpoint (the docker-compose `openshell-gateway` service, or any gateway).
+    """
 
-    def teardown(self, handle: str) -> None:  # pragma: no cover
-        raise NotImplementedError
+    def __init__(self, gateway_endpoint: str | None, insecure: bool = True,
+                 create_timeout: float = 300.0) -> None:
+        if not gateway_endpoint:
+            raise MissingCredentials("OpenShell requires a gateway endpoint")
+        self.endpoint = gateway_endpoint
+        self.insecure = insecure
+        self.create_timeout = create_timeout
+        self._env = {
+            **os.environ,
+            "OPENSHELL_GATEWAY_ENDPOINT": gateway_endpoint,
+            "OPENSHELL_GATEWAY_INSECURE": "true" if insecure else "false",
+        }
+
+    def _cli(self, *args: str, timeout: float = 120.0):
+        import subprocess
+        return subprocess.run(
+            ["openshell", *args], env=self._env, capture_output=True,
+            text=True, timeout=timeout,
+        )
+
+    def deploy(self, agent: str, policy: Policy) -> str:
+        import tempfile
+        import uuid
+        from .openshell_policy import to_openshell_yaml
+
+        name = f"cdht-{uuid.uuid4().hex[:8]}"
+        r = self._cli("sandbox", "create", "--name", name, "--no-auto-providers",
+                      timeout=self.create_timeout)
+        if r.returncode != 0:
+            raise RuntimeError(f"openshell sandbox create failed: {r.stderr.strip()}")
+        with tempfile.NamedTemporaryFile("w", suffix=".yaml", delete=False) as f:
+            f.write(to_openshell_yaml(policy))
+            policy_path = f.name
+        r = self._cli("policy", "set", name, "--policy", policy_path, "--wait")
+        if r.returncode != 0:
+            self.teardown(name)
+            raise RuntimeError(f"openshell policy set failed: {r.stderr.strip()}")
+        return name
+
+    def exec(self, handle: str, command: list[str], timeout: float = 60.0):
+        """Run a command inside the sandbox; return (exit_code, combined output)."""
+        r = self._cli("sandbox", "exec", "-n", handle, "--no-tty", "--",
+                       *command, timeout=timeout)
+        return r.returncode, (r.stdout + r.stderr)
+
+    def teardown(self, handle: str) -> None:
+        self._cli("sandbox", "delete", handle)
 
 
 class HiddenLayerAssessor:

@@ -7,12 +7,11 @@
 # namespaces). HiddenLayer + vLLM are selected/credentialed via .env
 # (see .env.example). Mock backends are for the test suite, not deployment.
 
-volumes:
-  openshell_state:
-
 services:
-  # One-shot: generate the sandbox-JWT signing keys the gateway needs, into the
-  # shared state volume (idempotent enough for dev — regenerates on re-up).
+  # One-shot: generate the sandbox-JWT signing keys the gateway needs.
+  # NOTE: the state dir is a HOST bind mount (not a named volume) so the gateway
+  # can share per-sandbox JWT token files with the sibling sandbox containers it
+  # spawns via the Docker socket — a named volume breaks that sharing.
   openshell-jwt-init:
     image: ghcr.io/nvidia/openshell/gateway:latest
     user: "0"
@@ -24,7 +23,11 @@ services:
       - --server-san=localhost
       - --server-san=host.openshell.internal
     volumes:
-      - openshell_state:/var/lib/openshell
+      - type: bind
+        source: /var/lib/openshell
+        target: /var/lib/openshell
+        bind:
+          create_host_path: true
     restart: "no"
 
   # The real OpenShell gateway (prebuilt image). Spawns sandbox containers via
@@ -41,7 +44,11 @@ services:
       - "127.0.0.1:8081:8081"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-      - openshell_state:/var/lib/openshell
+      - type: bind
+        source: /var/lib/openshell
+        target: /var/lib/openshell
+        bind:
+          create_host_path: true
       - ./deploy/openshell/gateway.toml:/etc/openshell/gateway.toml:ro
     environment:
       OPENSHELL_GATEWAY_CONFIG: /etc/openshell/gateway.toml
