@@ -79,9 +79,9 @@ It maps onto the four-component security stack from the original brief
 
 Each sits behind an interface with a **deterministic mock** (default, runs
 anywhere with no credentials) and a **real adapter** that swaps in via env — so
-the whole thing runs offline out of the box. The vLLM/Nemotron adapter is fully
-wired today; the OpenShell and HiddenLayer adapters are credential-guarded seams
-(see the status table below).
+the whole thing runs offline out of the box. The **HiddenLayer** (red team) and
+**vLLM/Nemotron** (blue team) adapters are wired against the live services;
+OpenShell is a credential-guarded seam (see the status table below).
 
 ## Try it
 
@@ -98,6 +98,14 @@ unusable, so the loop always converges):
 export LLM=nemotron NEMOTRON_BASE_URL=http://YOUR_VLLM_HOST:8000 \
        NEMOTRON_MODEL=<served-model-id> NEMOTRON_KEY=<key>
 uv run security-orchestrator run --out runs/live
+```
+
+Use the **live HiddenLayer** red team (real prompt-injection detection driving
+the findings) with the `hiddenlayer` extra:
+
+```bash
+export ASSESSOR=hiddenlayer HIDDENLAYER_CLIENT_ID=<id> HIDDENLAYER_CLIENT_SECRET=<secret>
+uv run --extra hiddenlayer security-orchestrator run --out runs/live
 ```
 
 ## More
@@ -118,7 +126,7 @@ honest, not aspirational.
 | **Recursive Intelligence** | Track | ✅ Demonstrated | Run-over-run improvement is *measured*: the ablation harness reports exfil-success-rate 100%→0% with enforcement on vs. a flat 100% control — `security-orchestrator ablate`, plus the convergence curve in every report. |
 | **Best Use of vLLM** | Bounty | ✅ Demonstrated | A live OpenAI-compatible vLLM endpoint drives the blue team (`NemotronLLM`), with response validation and a heuristic fallback. Ran end-to-end against a self-hosted endpoint. |
 | **NVIDIA OpenShell** (policy is the sole guard) | Bounty | ◑ Architected | The sandbox models OpenShell as the *sole* egress guard, with the enforcement on/off ablation that proves the policy — not the harness — stops attacks. Real OpenShell CLI/schema wiring is a seam. |
-| **HiddenLayer Runtime Security** | Bounty | ◑ Architected | The assessor + adversarial corpus are the red team feeding the loop; the live HiddenLayer API is a credential-guarded seam. |
+| **HiddenLayer Runtime Security** | Bounty | ✅ Demonstrated | Every attack payload is sent through HiddenLayer's live prompt analyzer; real detections (OWASP LLM01 prompt-injection, unsafe-input, …) drive the findings, and the assessor is **fail-closed** on API/WAF errors. Enable with `ASSESSOR=hiddenlayer`. |
 | **Best Use of Nemotron** | Bounty | ◑ Ready | The vLLM adapter is model-agnostic and runs today against any served model; point `NEMOTRON_MODEL` at Nemotron to make it the reasoning model for the blue team. |
 | **Most Commercializable** | Bounty (optional) | ○ Narrative | Positioning: autonomous-agent security co-evaluation as a product. |
 

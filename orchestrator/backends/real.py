@@ -1,9 +1,9 @@
-"""Real adapter stubs for the gated components.
+"""Real adapters for the gated components.
 
-Each satisfies the same Protocol as its mock and guards on credentials. The live
-wiring is intentionally left as clearly-marked TODO seams (see docs/DESIGN.md
-§8): the architecture is proven end-to-end on mocks first, and these swap in
-without touching the loop once credentials/endpoints are available.
+Each satisfies the same Protocol as its mock and guards on credentials. The
+Nemotron/vLLM (LLM) and HiddenLayer (Assessor) adapters are fully wired; the
+OpenShell (Sandbox) adapter is a clearly-marked seam (see docs/DESIGN.md §8).
+Backends are resolved from config, so the loop never imports these directly.
 """
 
 from __future__ import annotations
@@ -14,7 +14,8 @@ import time
 import urllib.error
 import urllib.request
 
-from ..models import AttackCase, Assessment, Policy, Recommendation
+from ..models import AttackCase, Assessment, Finding, Policy, Recommendation
+from .corpus import DEFAULT_CORPUS
 from .remediation import (
     REMEDIATION,
     REMEDIATION_MENU,
@@ -47,21 +48,126 @@ class OpenShellSandbox:
 
 
 class HiddenLayerAssessor:
-    """HiddenLayer adversarial assessment service."""
+    """HiddenLayer Runtime Security as the red team.
 
-    def __init__(self, api_key: str | None, project: str | None = None) -> None:
-        if not api_key:
-            raise MissingCredentials("HiddenLayer requires an api key")
-        self.api_key = api_key
+    Each attack payload is sent through HiddenLayer's prompt analyzer, which
+    returns real threat detections (prompt injection, unsafe input, PII, code,
+    DoS, ...) with MITRE/OWASP framework labels. HiddenLayer decides whether an
+    attack is a genuine threat; the OpenShell policy decides whether it is
+    defended — so live detections drive the loop while it still converges.
+
+    Fail-closed: if the HiddenLayer API (or the WAF in front of it) errors on a
+    payload, that payload is treated as an unresolved threat rather than waved
+    through. Detections are cached per payload (they do not depend on the
+    policy), so re-runs across rounds don't re-bill the same call.
+
+    Requires `pip install hiddenlayer-sdk` (the `hiddenlayer` optional extra);
+    the SDK is imported lazily so the default mock path stays dependency-free.
+    """
+
+    # HiddenLayer category booleans that count as "this payload is a threat".
+    _THREAT_CATEGORIES = (
+        "prompt_injection", "unsafe_input", "unsafe_output", "guardrail",
+        "input_code", "input_dos", "input_pii", "output_code", "output_pii",
+        "output_tool_use",
+    )
+
+    def __init__(
+        self,
+        client_id: str | None,
+        client_secret: str | None,
+        environment: str = "prod-us",
+        project: str | None = None,
+        corpus: list[AttackCase] | None = None,
+    ) -> None:
+        if not client_id or not client_secret:
+            raise MissingCredentials(
+                "HiddenLayer requires client_id + client_secret"
+            )
+        self.client_id = client_id
+        self.client_secret = client_secret
+        self.environment = environment
         self.project = project
+        self._corpus: list[AttackCase] = list(
+            corpus if corpus is not None else DEFAULT_CORPUS
+        )
+        self._client = None  # lazy: constructed on first assess()
+        self._cache: dict[str, dict] = {}
 
-    def assess(self, handle: str, policy: Policy) -> Assessment:  # pragma: no cover
-        # TODO: kick off a HiddenLayer scan against the deployed agent, poll for
-        # completion, map results -> [Finding].
-        raise NotImplementedError("HiddenLayer live assess not yet wired")
+    def _get_client(self):
+        if self._client is None:
+            from hiddenlayer import HiddenLayer  # lazy import (optional dep)
 
-    def add_tests(self, cases: list[AttackCase]) -> None:  # pragma: no cover
-        raise NotImplementedError
+            self._client = HiddenLayer(
+                client_id=self.client_id,
+                client_secret=self.client_secret,
+                environment=self.environment,
+            )
+        return self._client
+
+    def _analyze(self, payload: str) -> dict:
+        if payload in self._cache:
+            return self._cache[payload]
+        try:
+            kwargs = {"prompt": payload}
+            if self.project:
+                kwargs["hl_project_id"] = self.project
+            resp = self._get_client().prompt_analyzer.create(**kwargs).to_dict()
+            cats = [
+                name
+                for name, hit in resp.get("categories", {}).items()
+                if hit and name in self._THREAT_CATEGORIES
+            ]
+            owasp = [f["label"] for f in resp.get("frameworks", {}).get("owasp", [])]
+            detail = {"flagged": bool(cats), "labels": owasp or cats, "error": None}
+        except MissingCredentials:
+            raise
+        except Exception as exc:  # API/WAF/network error -> fail closed
+            detail = {"flagged": True, "labels": [], "error": type(exc).__name__}
+        self._cache[payload] = detail
+        return detail
+
+    def assess(self, handle: str, policy: Policy) -> Assessment:
+        active = policy.controls()
+        findings: list[Finding] = []
+        for case in self._corpus:
+            det = self._analyze(case.payload)
+            defended = case.requires_control in active
+            is_threat = det["flagged"]
+            resolved = (not is_threat) or defended
+            if det["error"]:
+                evidence = (
+                    f"HiddenLayer/WAF error ({det['error']}) — fail-closed; "
+                    + ("defended by " + case.requires_control if defended
+                       else "missing control " + case.requires_control)
+                )
+            elif is_threat:
+                tag = ", ".join(det["labels"]) or "threat"
+                evidence = (
+                    f"HiddenLayer flagged [{tag}]; "
+                    + ("defended by " + case.requires_control if defended
+                       else "missing control " + case.requires_control)
+                )
+            else:
+                evidence = "HiddenLayer: no threat detected"
+            findings.append(
+                Finding(
+                    id=case.id,
+                    category=case.category,
+                    severity=case.severity,
+                    attack_vector=case.payload,
+                    evidence=evidence,
+                    resolved=resolved,
+                )
+            )
+        return Assessment(findings=findings)
+
+    def add_tests(self, cases: list[AttackCase]) -> None:
+        known = {c.id for c in self._corpus}
+        for c in cases:
+            if c.id not in known:
+                self._corpus.append(c)
+                known.add(c.id)
 
 
 _SYSTEM = (
