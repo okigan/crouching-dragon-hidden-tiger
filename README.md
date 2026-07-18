@@ -102,3 +102,22 @@ uv run security-orchestrator run --out runs/live
 - **Design & diagrams:** [docs/DESIGN.md](docs/DESIGN.md)
 - **Development, testing, config, deployment:** [DEVELOP.md](DEVELOP.md)
 - **The original brief:** [docs/PLAN.md](docs/PLAN.md)
+
+## Tracks & bounties targeted
+
+Built for the AITX × NVIDIA hackathon. Status reflects what is **actually
+demonstrated in this repo** versus sponsor integrations that are wired as
+credential-guarded seams (`orchestrator/backends/real.py`) awaiting access —
+honest, not aspirational.
+
+| Target | Type | Status | What backs it |
+|--------|------|--------|---------------|
+| **Recursive Intelligence** | Track | ✅ Demonstrated | Run-over-run improvement is *measured*: the ablation harness reports exfil-success-rate 100%→0% with enforcement on vs. a flat 100% control — `security-orchestrator ablate`, plus the convergence curve in every report. |
+| **Best Use of vLLM** | Bounty | ✅ Demonstrated | A live OpenAI-compatible vLLM endpoint drives the blue team (`NemotronLLM`), with response validation and a heuristic fallback. Ran end-to-end against a self-hosted endpoint. |
+| **NVIDIA OpenShell** (policy is the sole guard) | Bounty | ◑ Architected | The sandbox models OpenShell as the *sole* egress guard, with the enforcement on/off ablation that proves the policy — not the harness — stops attacks. Real OpenShell CLI/schema wiring is a seam. |
+| **HiddenLayer Runtime Security** | Bounty | ◑ Architected | The assessor + adversarial corpus are the red team feeding the loop; the live HiddenLayer API is a credential-guarded seam. |
+| **Best Use of Nemotron** | Bounty | ◑ Ready | The vLLM adapter is model-agnostic and runs today against any served model; point `NEMOTRON_MODEL` at Nemotron to make it the reasoning model for the blue team. |
+| **Most Commercializable** | Bounty (optional) | ○ Narrative | Positioning: autonomous-agent security co-evaluation as a product. |
+
+Legend: ✅ demonstrated · ◑ architected, real integration pending credentials ·
+○ narrative only.
