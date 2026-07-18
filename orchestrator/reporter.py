@@ -63,6 +63,7 @@ class Reporter:
                     "resolved": f.resolved,
                     "hl_detected": f.hl_detected,
                     "openshell_blocked": f.openshell_blocked,
+                    "hl_signals": list(f.hl_signals),
                     "evidence": f.evidence,
                     "references": [
                         {"source": r.source, "label": r.label,
@@ -215,43 +216,64 @@ def _policy_evolution(traces: list[dict]) -> str:
     )
 
 
-def _detection_gaps(traces: list[dict]) -> str:
-    """Highlight the prompts that passed through HiddenLayer (were not detected)
-    and the OpenShell control that had to be added to catch each — the whole
-    point of defense in depth."""
+def _bypass_analysis(traces: list[dict]) -> str:
+    """Two-sided bypass report from the final state: which attacks bypass
+    HiddenLayer (no / few signals) and which bypass OpenShell (no capability
+    control), and which layer stops each."""
     if not traces:
         return ""
-    # evaders: base-corpus findings HiddenLayer did not detect (from round 0)
-    evaders = {
-        f["id"]: f for f in traces[0]["findings"]
-        if not f.get("hl_detected", False) and not f["id"].startswith("REG-")
-    }
-    if not evaders:
+    final = traces[-1]["findings"]
+    base = [f for f in final if not f["id"].startswith("REG-")]
+    if not base:
         return ""
-    # for each evader, the OpenShell op that addressed it
+
+    # the OpenShell op that was applied to catch each finding, across all rounds
     fix = {}
     for t in traces:
         rec = t.get("remediation")
         if rec and rec.get("ops"):
             for aid in rec.get("addresses", []):
                 fix[aid] = _op_summary(rec["ops"][0])
-    rows = []
-    for fid, f in evaders.items():
-        change = fix.get(fid, "—")
-        rows.append(
-            f'<li><span class="gapid">{html.escape(fid)}</span>'
-            f'<span class="gapcat">{html.escape(f["category"])}</span>'
-            f'<span class="gaparrow">passed HiddenLayer →</span>'
-            f'<code class="chg">{html.escape(change)}</code></li>'
-        )
-    caught = sum(1 for f in traces[0]["findings"]
-                 if f.get("hl_detected") and not f["id"].startswith("REG-"))
+
+    hl_bypass, os_bypass = [], []
+    for f in base:
+        fid = html.escape(f["id"])
+        cat = html.escape(f["category"])
+        n_sig = len(f.get("hl_signals", []))
+        if not f.get("hl_detected", False):          # bypassed HiddenLayer
+            change = fix.get(f["id"], "—")
+            hl_bypass.append(
+                f'<li><span class="gapid">{fid}</span>'
+                f'<span class="gapcat">{cat}</span>'
+                f'<span class="sigcount">{n_sig} HiddenLayer signals</span>'
+                f'<span class="gaparrow">→ stopped by OpenShell</span>'
+                f'<code class="chg">{html.escape(change)}</code></li>'
+            )
+        if not f.get("openshell_blocked", False):    # bypassed OpenShell
+            sigs = ", ".join(f.get("hl_signals", [])) or "detected"
+            os_bypass.append(
+                f'<li><span class="gapid">{fid}</span>'
+                f'<span class="gapcat">{cat}</span>'
+                f'<span class="gaparrow">→ stopped by HiddenLayer</span>'
+                f'<span class="sig">signals: {html.escape(sigs)}</span></li>'
+            )
+
+    def block(title, sub, rows):
+        if not rows:
+            return ""
+        return (f'<div class="bypass-col"><h3>{title}</h3>'
+                f'<div class="evo-sub">{sub}</div>'
+                f'<ul class="gaplist">{"".join(rows)}</ul></div>')
+
     return (
-        '<div class="gaps"><h2>Detection gaps — where OpenShell backstops HiddenLayer</h2>'
-        f'<div class="evo-sub">HiddenLayer caught {caught} attack(s) at the content '
-        f'layer; these {len(evaders)} evaded content detection and needed an '
-        "OpenShell capability control to stop:</div>"
-        f'<ul class="gaplist">{"".join(rows)}</ul></div>'
+        '<div class="gaps"><h2>Bypass analysis — what each layer misses</h2>'
+        '<div class="bypass-grid">'
+        + block(f"Bypassed HiddenLayer ({len(hl_bypass)})",
+                "no / few signals — OpenShell is the backstop", hl_bypass)
+        + block(f"Bypassed OpenShell ({len(os_bypass)})",
+                "no capability control — HiddenLayer detection catches them",
+                os_bypass)
+        + "</div></div>"
     )
 
 
@@ -266,9 +288,12 @@ def _iteration_card(trace: dict) -> str:
         cls = "resolved" if f["resolved"] else "open"
         hl_detected = f.get("hl_detected", False)
         os_blocked = f.get("openshell_blocked", False)
+        n_sig = len(f.get("hl_signals", []))
+        sig_title = ", ".join(f.get("hl_signals", [])) or "no signals"
         hl_cell = (
-            '<span class="layer ok">detected</span>' if hl_detected
-            else '<span class="layer gap">passed</span>'
+            f'<span class="layer ok" title="{html.escape(sig_title)}">{n_sig} signals</span>'
+            if hl_detected
+            else '<span class="layer gap" title="no signals">0 signals</span>'
         )
         os_cell = (
             '<span class="layer ok">blocked</span>' if os_blocked
@@ -364,7 +389,7 @@ def _iteration_card(trace: dict) -> str:
 def _render_html(traces: list[dict], run: RunResult) -> str:
     cards = "".join(_iteration_card(t) for t in traces)
     evolution = _policy_evolution(traces)
-    gaps = _detection_gaps(traces)
+    gaps = _bypass_analysis(traces)
     converged = run.converged
     status_txt = "CONVERGED" if converged else "STOPPED"
     status_cls = "ok" if converged else "warn"
@@ -447,6 +472,12 @@ def _render_html(traces: list[dict], run: RunResult) -> str:
   .gapid {{ font-weight:600; min-width:64px; }}
   .gapcat {{ color:var(--muted); }}
   .gaparrow {{ color:#d1660f; font-weight:600; }}
+  .bypass-grid {{ display:grid; grid-template-columns:1fr 1fr; gap:18px; }}
+  @media (max-width:640px) {{ .bypass-grid {{ grid-template-columns:1fr; }} }}
+  .bypass-col h3 {{ font-size:13px; margin:0 0 2px; }}
+  .sigcount {{ font-size:11px; font-weight:600; padding:1px 7px; border-radius:9px;
+    background:rgba(209,102,15,.15); color:#d1660f; }}
+  .sig {{ font-size:11px; color:var(--muted); }}
   .layer {{ font-size:11px; font-weight:600; padding:1px 7px; border-radius:9px; }}
   .layer.ok {{ background:rgba(47,189,107,.15); color:#2fbd6b; }}
   .layer.gap {{ background:rgba(209,102,15,.15); color:#d1660f; }}

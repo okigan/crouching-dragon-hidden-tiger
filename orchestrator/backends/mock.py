@@ -51,18 +51,28 @@ class MockAssessor:
             corpus if corpus is not None else DEFAULT_CORPUS
         )
 
+    # Representative HiddenLayer signals for the simulated (offline) detector.
+    _SIGNALS = {
+        "prompt_injection": ("prompt_injection", "unsafe_input"),
+        "pii_exfiltration": ("input_pii", "unsafe_input"),
+    }
+
     def assess(self, handle: str, policy: Policy) -> Assessment:
         findings: list[Finding] = []
         for case in self._corpus:
+            signals = (
+                self._SIGNALS.get(case.category, ("unsafe_input",))
+                if case.hl_detects else ()
+            )
             hl_note = (
-                "HiddenLayer detected (simulated)"
+                f"HiddenLayer detected (simulated): {', '.join(signals)}"
                 if case.hl_detects
-                else "passed HiddenLayer — not detected (simulated)"
+                else "0 signals — bypassed HiddenLayer (simulated)"
             )
             findings.append(
                 evaluate(
                     case, case.hl_detects, hl_note, policy,
-                    refs_for_category(case.category),
+                    refs_for_category(case.category), hl_signals=signals,
                 )
             )
         return Assessment(findings=findings)

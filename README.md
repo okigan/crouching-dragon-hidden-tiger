@@ -30,10 +30,11 @@ uv run security-orchestrator run --save-policy runs/latest/hardened.yaml
 
 ![Sample run report — a live HiddenLayer run; 3 attacks evade detection and OpenShell is hardened to catch them](docs/sample-report.png)
 
-*A real run with `ASSESSOR=hiddenlayer`. The **Detection gaps** panel lists the
-attacks that passed through HiddenLayer and the OpenShell control that backstops
-each; the two-layer table shows, per round, whether **HiddenLayer** detected the
-payload and whether **OpenShell** blocked it (LANDED = evaded both). Each
+*A real run with `ASSESSOR=hiddenlayer`. The **Bypass analysis** panel is
+two-sided: attacks that **bypass HiddenLayer** (0 / few signals → stopped by
+OpenShell) and attacks that **bypass OpenShell** (no capability control → stopped
+by HiddenLayer). The two-layer table shows, per round, the HiddenLayer **signal
+count** and whether **OpenShell** blocked it (LANDED = bypassed both). Each
 remediation expands to the exact **OpenShell config applied** and links to the
 **real documentation** — OWASP LLM Top-10, MITRE ATLAS, HiddenLayer docs, and the
 **HiddenLayer APE** technique/objective the attack uses.*

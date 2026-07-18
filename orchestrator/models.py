@@ -58,6 +58,7 @@ class Finding:
     # Defense-in-depth outcome (§9): which layer, if any, stopped this attack.
     hl_detected: bool = False        # HiddenLayer flagged the payload (content layer)
     openshell_blocked: bool = False  # OpenShell policy denies the capability
+    hl_signals: tuple[str, ...] = () # the HiddenLayer signals that fired (empty = bypass)
 
     def resolve(self) -> "Finding":
         return replace(self, resolved=True)
