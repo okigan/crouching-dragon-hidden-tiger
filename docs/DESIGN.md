@@ -41,7 +41,9 @@ flowchart TD
     classDef blue fill:#12233a,stroke:#3457d5,color:#8fb2ff
 ```
 
-Red = the **red team** (attack); blue = the **blue team** (harden). See §9.
+Orange = **assessment** (the attack corpus, run and detected via HiddenLayer);
+blue = **remediation** (the blue reasoner + policy store). HiddenLayer is a
+detection layer, not the attacker — see §9.
 
 ### Interfaces (`orchestrator/interfaces.py`)
 
@@ -166,33 +168,71 @@ fail-closed. **OpenShell** (Sandbox) remains a credential-guarded seam. The
 mocks prove the architecture end-to-end with zero setup; real backends swap in
 via env without touching the loop.
 
-## 9. Red/Blue co-evolution & the ablation control
+## 9. Roles: attacker, defense-in-depth, and the blue reasoner
 
-Adopted from a coworker's `redblue-arena` plan
-([redblue-arena/](redblue-arena/README.md)). We fold in the mechanics that apply
-to our runnable lab, not the hackathon cloud infra.
+> **Correcting an earlier mislabel.** HiddenLayer is a **detection layer**, not
+> the red team. Its API (`prompt_analyzer` / Runtime Security) *inspects* an
+> interaction and classifies threats; it does not *generate* attacks. Earlier
+> revisions of this doc called the `Assessor` "the red team" — that conflated
+> two different things. The accurate model:
 
-**Vocabulary.** The loop is a two-sided co-evolution:
-- **Red team** = the `Assessor` (HiddenLayer). It attacks the deployed agent and
-  produces findings.
-- **Blue team** = the `LLM` (Nemotron) + `PolicyStore`. It reads the findings,
-  reasons about root cause, and hardens the policy — one finding per round.
+- **Adversarial input — the red side.** The **attack corpus** (payloads we
+  author, `DEFAULT_CORPUS`) is the adversary. A future LLM red-team *generator*
+  would produce these dynamically; today they are curated.
+- **Defense in depth — two layers.**
+  - **HiddenLayer Runtime Security** — the *content* layer. It detects and
+    classifies malicious content (prompt injection, PII, code, …) with
+    OWASP/MITRE mappings; a guardrail policy decides which detected categories to
+    block.
+  - **NVIDIA OpenShell** — the *capability* layer. It enforces egress / tool /
+    filesystem controls and remains the **sole guard on the egress path** (data
+    cannot leave except as the policy allows — a different layer from content
+    detection, so the two do not conflict).
+- **Blue reasoner.** The `LLM` (Nemotron) + `PolicyStore` read the detections and
+  outcomes and harden the layer that fits each finding — content threats at
+  HiddenLayer, capability/egress threats at OpenShell.
 
-**Boundary invariant.** The `Sandbox` (OpenShell) is the *sole* guard: whether
-an attack lands is decided by the enforced policy, not by the harness. Our
-`MockSandbox` honors this — with enforcement off, the target experiences an
-unguarded policy (`loop._unenforced`) and every attack succeeds regardless of
-what blue wrote.
+**When does an attack land?** Only if *neither* layer neutralizes it: HiddenLayer
+does not detect-and-block it, and OpenShell does not deny the capability it
+needs. Different classes are naturally mitigated at different layers — data
+exfiltration at OpenShell (egress), prompt injection at HiddenLayer or OpenShell's
+system guard, PII at HiddenLayer (redact/block).
 
-**Ablation toggle (`enforce`).** `LoopConfig.enforce` / `--no-enforce` / env
-`OPENSHELL_ENFORCE=false`. The control that proves the policy is what stops the
-attacks: blue still learns and patches, but with enforcement off the guard never
-takes effect.
+**Ablation / recursive-intelligence delta.** `LoopConfig.enforce` /
+`--no-enforce` / `OPENSHELL_ENFORCE=false`. With defenses off, blue still learns
+but neither layer takes effect, so attack-success-rate stays flat; with defenses
+on it drops to zero. `Assessment.success_rate()` = fraction of attacks that still
+land; `RunResult.success_delta` is the round-1 → round-N drop; `orchestrator
+ablate` reports the difference — the "recursive intelligence" signal.
 
-**Exfil-success-rate & recursive-intelligence delta.**
-`Assessment.success_rate()` = fraction of attack cases that still land. The loop
-records it per round; `RunResult.success_delta` is the round-1 → round-N drop.
-`orchestrator ablate` runs enforcement ON vs OFF from the same start and reports
-the difference (enforced drops to 0%, ablated stays flat) — the headline
-"recursive intelligence" signal. Both the per-run dashboard and the ablation
-report surface it.
+**Honesty ledger (real vs modeled).**
+- *Real:* HiddenLayer detections (live API), the OpenShell-compatible policy
+  schema, the loop, and the metrics.
+- *Modeled:* whether an attack ultimately *lands* is computed from the defense
+  state — there is no real target agent yet; HiddenLayer's *block* action is
+  modeled by our guardrail policy (in production these map to the HiddenLayer
+  project policy's `block_*` flags); OpenShell enforcement is a stub.
+
+## 10. Reasonable pivot & roadmap
+
+The pivot is **from "HiddenLayer = red team" to "defense-in-depth
+co-evaluation":** keep the loop, but model HiddenLayer as the content-detection
+layer alongside OpenShell's capability layer, with the corpus as the adversary.
+
+- **Phase A — framing (this change).** Correct the roles here and in the README;
+  no behavior change. The current code already matches this model (the corpus is
+  ours; HiddenLayer only detects), so this is a documentation correction.
+- **Phase B — second defense layer.** Add a guardrail/detection policy (which
+  HiddenLayer categories to block) as a first-class defense; let blue remediate a
+  finding at *either* layer; show both policies evolving in the report. This is
+  where HiddenLayer becomes an active defense, not just an observer.
+- **Phase C — APE grounding.** Classify the corpus by HiddenLayer's Adversarial
+  Prompt Engineering (APE) taxonomy — technique (how) + objective (what) — and
+  link findings to it, so the red side speaks a rigorous shared lexicon.
+- **Phase D — stretch.** A real target agent so "landing" is *observed* not
+  modeled; drive HiddenLayer's project block policy via the API; an LLM
+  red-team generator for novel attacks (the true "red team").
+
+This is adapted from a coworker's `redblue-arena` plan
+([redblue-arena/](redblue-arena/README.md)); we keep the mechanics that fit a
+runnable lab, not the hackathon cloud infra.

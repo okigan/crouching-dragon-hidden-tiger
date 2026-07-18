@@ -3,9 +3,10 @@
 **An AI security lab that hardens an agent's NVIDIA OpenShell runtime policy until attacks stop working — automatically, and proves it.**
 
 You start with a permissively-configured AI agent running under an [NVIDIA
-OpenShell](docs/PLAN.md) sandbox. A red team attacks it, a blue team (an LLM)
-reads each failure and tightens the OpenShell policy, and the cycle repeats until
-no attack lands. The result is a **hardened OpenShell policy** plus a **measured
+OpenShell](docs/PLAN.md) sandbox. An **attack corpus** probes it, **HiddenLayer**
+detects the threats, and a blue team (an LLM) reads each landed attack and
+tightens the OpenShell policy — the cycle repeats until no attack lands. The
+result is a **hardened OpenShell policy** plus a **measured
 before/after** you can put in front of anyone.
 
 ## What you get from one run
@@ -38,10 +39,12 @@ detection (OWASP LLM Top-10, MITRE ATLAS, HiddenLayer docs).*
 
 ## The proof it isn't cheating: the ablation
 
-The NVIDIA OpenShell sandbox is the **sole guard** — an attack is stopped by the
-OpenShell policy, not by the harness. (The default run enforces this with an
-OpenShell-compatible policy model; live OpenShell is a credential-guarded
-adapter — see the status table below.) Run the same loop with enforcement ON vs
+Today, OpenShell is the **guard that stops attacks** — HiddenLayer *detects* and
+classifies them, but the OpenShell policy is what neutralizes them (making it a
+clean ablation target; a HiddenLayer *blocking* layer is [Phase B](docs/DESIGN.md)).
+An attack is stopped by the OpenShell policy, not by the harness. (The default
+run enforces this with an OpenShell-compatible policy model; live OpenShell is a
+credential-guarded adapter — see the status table below.) Run the loop enforcement ON vs
 OFF:
 
 ```bash
@@ -59,11 +62,13 @@ gap is the recursive-intelligence signal.
 
 ## How it works
 
-A red-team / blue-team co-evolution loop. Each round:
+A defense-in-depth co-evaluation loop (attack corpus → detection → hardening).
+Each round:
 
 1. **Deploy** the agent under the current OpenShell policy in the sandbox.
-2. **Attack (red).** An assessor runs an adversarial corpus — data-exfiltration,
-   tool-abuse, prompt-injection — and reports which attacks landed.
+2. **Attack & detect.** The **attack corpus** (the adversary) is run against the
+   deployed defenses; **HiddenLayer** detects and classifies each threat
+   (prompt-injection, PII, code, …), and the assessor reports which attacks land.
 3. **Analyze (blue).** An LLM root-causes the worst finding and proposes an
    OpenShell policy patch (validated so it only ever tightens).
 4. **Patch & re-test.** Apply the patch, add a regression test, run again.
@@ -74,14 +79,14 @@ It maps onto the four-component security stack from the original brief
 
 | Component | Role | Here |
 |-----------|------|------|
-| NVIDIA OpenShell | Sandboxed execution + policy enforcement (the sole guard) | `Sandbox` |
-| HiddenLayer | Adversarial assessment (the red team) | `Assessor` |
+| NVIDIA OpenShell | Capability/egress enforcement (sole guard on the egress path) | `Sandbox` |
+| HiddenLayer | Runtime **detection** of malicious content (the content-defense layer) | `Assessor` (detector) |
 | Nemotron on vLLM | Reasoning that proposes fixes (the blue team) | `LLM` |
 | Security Orchestrator | Drives the loop | built here |
 
 Each sits behind an interface with a **deterministic mock** (default, runs
 anywhere with no credentials) and a **real adapter** that swaps in via env — so
-the whole thing runs offline out of the box. The **HiddenLayer** (red team) and
+the whole thing runs offline out of the box. The **HiddenLayer** (detection) and
 **vLLM/Nemotron** (blue team) adapters are wired against the live services;
 OpenShell is a credential-guarded seam (see the status table below).
 
@@ -102,8 +107,8 @@ export LLM=nemotron NEMOTRON_BASE_URL=http://YOUR_VLLM_HOST:8000 \
 uv run security-orchestrator run --out runs/live
 ```
 
-Use the **live HiddenLayer** red team (real prompt-injection detection driving
-the findings) with the `hiddenlayer` extra:
+Use the **live HiddenLayer** detection layer (real prompt-injection/PII/code
+detection driving the findings) with the `hiddenlayer` extra:
 
 ```bash
 export ASSESSOR=hiddenlayer HIDDENLAYER_CLIENT_ID=<id> HIDDENLAYER_CLIENT_SECRET=<secret>
