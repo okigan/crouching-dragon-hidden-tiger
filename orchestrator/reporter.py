@@ -12,6 +12,8 @@ import html
 import json
 import re
 from datetime import datetime, timezone
+
+import yaml
 from pathlib import Path
 
 from .models import Assessment, Policy, Recommendation, RunResult
@@ -60,6 +62,11 @@ class Reporter:
                     "severity": str(f.severity),
                     "resolved": f.resolved,
                     "evidence": f.evidence,
+                    "references": [
+                        {"source": r.source, "label": r.label,
+                         "name": r.name, "url": r.url}
+                        for r in f.references
+                    ],
                 }
                 for f in assessment.findings
             ],
@@ -131,6 +138,35 @@ def _op_summary(op: dict) -> str:
     if kind in ("allow_add", "tool_allow"):
         return f"{path} += {value}"
     return f"{path} = {value}"
+
+
+def _op_config_yaml(ops: list[dict]) -> str:
+    """Render the applied policy ops as the OpenShell config fragment that was
+    set — the concrete change written to the (OpenShell-compatible) policy."""
+    cfg: dict = {}
+    for op in ops:
+        section, _, key = op.get("path", "").partition(".")
+        value = op.get("value")
+        node = cfg.setdefault(section, {})
+        if op.get("op") == "tool_deny":
+            node.setdefault(key, [])
+            if value not in node[key]:
+                node[key].append(value)
+        else:
+            node[key] = value
+    return yaml.safe_dump(cfg, sort_keys=False, default_flow_style=False).strip()
+
+
+def _refs_html(refs: list[dict]) -> str:
+    if not refs:
+        return ""
+    links = "".join(
+        f'<a href="{html.escape(r["url"])}" target="_blank" rel="noopener" '
+        f'class="ref ref-{r["source"].split()[0].lower()}">'
+        f'{html.escape(r["source"])} {html.escape(r["label"])}</a>'
+        for r in refs
+    )
+    return f'<div class="refs">{links}</div>'
 
 
 _HL_LABEL = re.compile(r"HiddenLayer flagged \[([^\]]+)\]")
@@ -208,6 +244,26 @@ def _iteration_card(trace: dict) -> str:
         )
         ops = "".join(f"<li><code>{_op_text(o)}</code></li>" for o in rec["ops"])
         addresses = ", ".join(rec.get("addresses", [])) or "—"
+        # details: the OpenShell config that was applied + real docs for the
+        # HiddenLayer finding being remediated.
+        addr_ids = set(rec.get("addresses", []))
+        addr_refs, seen = [], set()
+        for f in findings:
+            if f["id"] in addr_ids:
+                for r in f.get("references", []):
+                    if r["url"] not in seen:
+                        seen.add(r["url"])
+                        addr_refs.append(r)
+        cfg_yaml = html.escape(_op_config_yaml(rec["ops"]))
+        refs_block = _refs_html(addr_refs)
+        details = f"""
+            <details class="detail" open>
+              <summary>OpenShell config applied &amp; references</summary>
+              <div class="detail-h">Applied to the OpenShell policy:</div>
+              <pre class="cfg">{cfg_yaml}</pre>
+              {"<div class='detail-h'>Finding documentation ("
+               + html.escape(addresses) + "):</div>" + refs_block if refs_block else ""}
+            </details>"""
         remediation = f"""
           <div class="remediation">
             <div class="rem-head">
@@ -217,6 +273,7 @@ def _iteration_card(trace: dict) -> str:
             <div class="root-cause">{html.escape(rec["root_cause"])}</div>
             <div class="addresses">addresses: <b>{html.escape(addresses)}</b></div>
             <ul class="ops">{ops}</ul>
+            {details}
           </div>"""
     elif rec:
         remediation = (
@@ -357,6 +414,20 @@ def _render_html(traces: list[dict], run: RunResult) -> str:
   .addresses {{ font-size:12px; color:var(--muted); margin-bottom:4px; }}
   ul.ops {{ margin:4px 0 0; padding-left:18px; }}
   ul.ops code {{ font-size:12px; }}
+  .detail {{ margin-top:8px; }}
+  .detail summary {{ cursor:pointer; font-size:12px; font-weight:600;
+    color:var(--muted); }}
+  .detail-h {{ font-size:11px; color:var(--muted); margin:8px 0 3px;
+    text-transform:uppercase; letter-spacing:.03em; }}
+  pre.cfg {{ margin:0; padding:8px 10px; background:rgba(128,128,128,.12);
+    border-radius:6px; font-size:12px; overflow-x:auto;
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace; }}
+  .refs {{ display:flex; flex-wrap:wrap; gap:6px; }}
+  .refs .ref {{ font-size:11px; font-weight:600; padding:2px 8px; border-radius:10px;
+    text-decoration:none; border:1px solid var(--line); }}
+  .ref-owasp {{ background:rgba(209,102,15,.12); color:#d1660f; }}
+  .ref-mitre {{ background:rgba(52,87,213,.12); color:var(--accent); }}
+  .ref-hiddenlayer {{ background:#3a1418; color:#f0808f; }}
   code {{ background:rgba(128,128,128,.15); padding:1px 5px; border-radius:5px; }}
 </style>
 <div class="wrap">

@@ -32,8 +32,9 @@ uv run security-orchestrator run --save-policy runs/latest/hardened.yaml
 *A real run with `ASSESSOR=hiddenlayer`: the **OpenShell policy evolution** panel
 shows each version bump and the live HiddenLayer signal that triggered it
 (prompt-injection `LLM01`, `input_pii`, `input_code`); the rounds below show the
-five detections converging to zero. Each finding's evidence is the actual
-HiddenLayer verdict.*
+five detections converging to zero. Each remediation expands to the exact
+**OpenShell config applied** and links to the **real documentation** for that
+detection (OWASP LLM Top-10, MITRE ATLAS, HiddenLayer docs).*
 
 ## The proof it isn't cheating: the ablation
 

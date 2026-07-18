@@ -34,6 +34,17 @@ class Severity(IntEnum):
 
 
 @dataclass(frozen=True)
+class DocRef:
+    """A link to real documentation for a finding's threat class (e.g. the
+    OWASP LLM Top-10 entry or MITRE ATLAS technique the detector mapped it to)."""
+
+    source: str  # "OWASP", "MITRE ATLAS", "HiddenLayer"
+    label: str   # "LLM01", "AML.T0051", ...
+    name: str
+    url: str
+
+
+@dataclass(frozen=True)
 class Finding:
     """A single vulnerability surfaced by an Assessor."""
 
@@ -43,6 +54,7 @@ class Finding:
     attack_vector: str
     evidence: str
     resolved: bool = False
+    references: tuple[DocRef, ...] = ()  # real docs for this threat class
 
     def resolve(self) -> "Finding":
         return replace(self, resolved=True)

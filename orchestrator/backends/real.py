@@ -15,6 +15,7 @@ import urllib.error
 import urllib.request
 
 from ..models import AttackCase, Assessment, Finding, Policy, Recommendation
+from ..references import refs_for_category, refs_from_hl_frameworks
 from .corpus import DEFAULT_CORPUS
 from .remediation import (
     REMEDIATION,
@@ -119,11 +120,16 @@ class HiddenLayerAssessor:
                 if hit and name in self._THREAT_CATEGORIES
             ]
             owasp = [f["label"] for f in resp.get("frameworks", {}).get("owasp", [])]
-            detail = {"flagged": bool(cats), "labels": owasp or cats, "error": None}
+            detail = {
+                "flagged": bool(cats),
+                "labels": owasp or cats,
+                "frameworks": resp.get("frameworks", {}),
+                "error": None,
+            }
         except MissingCredentials:
             raise
         except Exception as exc:  # API/WAF/network error -> fail closed
-            detail = {"flagged": True, "labels": [], "error": type(exc).__name__}
+            detail = {"flagged": True, "labels": [], "frameworks": {}, "error": type(exc).__name__}
         self._cache[payload] = detail
         return detail
 
@@ -150,6 +156,10 @@ class HiddenLayerAssessor:
                 )
             else:
                 evidence = "HiddenLayer: no threat detected"
+            if det["error"] or not is_threat:
+                refs = refs_for_category(case.category)
+            else:
+                refs = refs_from_hl_frameworks(det.get("frameworks", {}), case.category)
             findings.append(
                 Finding(
                     id=case.id,
@@ -158,6 +168,7 @@ class HiddenLayerAssessor:
                     attack_vector=case.payload,
                     evidence=evidence,
                     resolved=resolved,
+                    references=refs,
                 )
             )
         return Assessment(findings=findings)
