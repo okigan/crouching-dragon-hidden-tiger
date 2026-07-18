@@ -46,11 +46,11 @@ class SecurityOrchestrator:
             handle = self.sandbox.deploy(self.config.agent, policy)
             try:
                 assessment = self.assessor.assess(handle, policy)
-                self.reporter.record_iteration(i, assessment, policy)
                 open_before = assessment.open_ids()
 
                 # Convergence: nothing left to fix.
                 if not open_before:
+                    self.reporter.record_iteration(i, assessment, policy)
                     result.iterations.append(
                         IterationResult(i, open_before, open_before, None,
                                         assessment.max_severity())
@@ -62,6 +62,7 @@ class SecurityOrchestrator:
                 # No-progress guard: identical open set to last iteration means
                 # the LLM cannot make headway — stop rather than spin forever.
                 if prev_open is not None and open_before == prev_open:
+                    self.reporter.record_iteration(i, assessment, policy)
                     result.iterations.append(
                         IterationResult(i, open_before, open_before, None,
                                         assessment.max_severity())
@@ -77,6 +78,7 @@ class SecurityOrchestrator:
                 if rec.new_tests:
                     self.assessor.add_tests(rec.new_tests)
 
+                self.reporter.record_iteration(i, assessment, policy, rec)
                 result.iterations.append(
                     IterationResult(
                         index=i,

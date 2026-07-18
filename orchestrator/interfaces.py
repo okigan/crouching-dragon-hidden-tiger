@@ -49,7 +49,9 @@ class LLM(Protocol):
 class Reporter(Protocol):
     """Persists traces and emits human-readable run summaries."""
 
-    def record_iteration(self, index: int, assessment: Assessment, policy: Policy) -> None:
+    def record_iteration(
+        self, index: int, assessment: Assessment, policy: Policy, recommendation=None
+    ) -> None:
         ...
 
     def summarize(self, run) -> str:  # run: RunResult (avoid import cycle in hint)

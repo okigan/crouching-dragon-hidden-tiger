@@ -1,0 +1,23 @@
+# Maximally permissive starting policy — an agent with no guard rails.
+# The improvement loop starts here and evolves it toward a hardened policy,
+# one finding at a time. Watch it converge in the HTML dashboard (--html).
+version: 1
+network:
+  default: allow          # any egress permitted
+  allow: []
+filesystem:
+  read:
+    - /
+  write:
+    - /
+tools:
+  allow:
+    - http_get
+    - http_post
+    - file_read
+    - file_write
+    - shell_exec          # arbitrary command execution
+  deny: []
+prompt:
+  system_guard: false     # no protection against prompt injection
+  max_input_tokens: 8000

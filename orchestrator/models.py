@@ -113,6 +113,10 @@ class Recommendation:
     root_cause: str
     patch: PolicyPatch
     new_tests: list["AttackCase"] = field(default_factory=list)
+    # Provenance for the visual report: which backend produced this and how.
+    source: str = "heuristic"  # heuristic | nemotron | nemotron-fallback
+    latency_ms: float = 0.0
+    llm_narrative: str = ""  # raw model text, when an LLM was consulted
 
 
 @dataclass(frozen=True)

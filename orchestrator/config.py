@@ -23,6 +23,7 @@ class Settings:
     nemotron_base_url: str | None = None
     nemotron_key: str | None = None
     nemotron_model: str = "nemotron"
+    nemotron_timeout: float = 20.0
 
     @classmethod
     def from_env(cls, env: dict[str, str] | None = None) -> "Settings":
@@ -38,6 +39,7 @@ class Settings:
             nemotron_base_url=e.get("NEMOTRON_BASE_URL"),
             nemotron_key=e.get("NEMOTRON_KEY", "not-needed"),
             nemotron_model=e.get("NEMOTRON_MODEL", "nemotron"),
+            nemotron_timeout=float(e.get("NEMOTRON_TIMEOUT", "20")),
         )
 
     def build_sandbox(self) -> Sandbox:
@@ -59,6 +61,9 @@ class Settings:
             return mock.MockLLM()
         if self.llm == "nemotron":
             return real.NemotronLLM(
-                self.nemotron_base_url, self.nemotron_key, self.nemotron_model
+                self.nemotron_base_url,
+                self.nemotron_key,
+                self.nemotron_model,
+                self.nemotron_timeout,
             )
         raise ValueError(f"unknown LLM={self.llm}")

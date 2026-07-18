@@ -13,11 +13,10 @@ from ..models import (
     Assessment,
     Finding,
     Policy,
-    PolicyPatch,
     Recommendation,
-    Severity,
 )
 from .corpus import DEFAULT_CORPUS
+from .remediation import heuristic_recommendation
 
 
 class MockSandbox:
@@ -83,65 +82,10 @@ class MockAssessor:
         return len(self._corpus)
 
 
-# Maps a finding category to the patch op that installs the fixing control, plus
-# a regression test to add. This is the mock stand-in for Nemotron's reasoning.
-_REMEDIATION: dict[str, dict] = {
-    "data_exfiltration": {
-        "op": {"op": "set_default", "path": "network.default", "value": "deny"},
-        "root_cause": "Egress is default-allow, permitting exfiltration.",
-    },
-    "tool_abuse": {
-        "op": {"op": "tool_deny", "path": "tools.deny", "value": "shell_exec"},
-        "root_cause": "Dangerous tool shell_exec is reachable by the agent.",
-    },
-    "prompt_injection": {
-        "op": {"op": "set_flag", "path": "prompt.system_guard", "value": True},
-        "root_cause": "No system-prompt guard, so injected instructions win.",
-    },
-}
-
-
 class MockLLM:
-    """Heuristic reasoning: addresses the single highest-severity open finding
-    per iteration (fix-one-at-a-time makes convergence observable across
-    multiple iterations). Returns an empty patch for categories it can't fix,
-    which the no-progress guard then catches."""
+    """Heuristic reasoning stand-in: addresses the single highest-severity open
+    finding per iteration (fix-one-at-a-time makes convergence observable across
+    iterations). Shares its remediation logic with the real adapter's fallback."""
 
     def analyze(self, assessment: Assessment, policy: Policy) -> Recommendation:
-        open_findings = assessment.unresolved()
-        if not open_findings:
-            return Recommendation(root_cause="no open findings", patch=PolicyPatch())
-
-        target = max(open_findings, key=lambda f: (f.severity, f.id))
-        remedy = _REMEDIATION.get(target.category)
-        if remedy is None:
-            return Recommendation(
-                root_cause=f"no known remediation for {target.category}",
-                patch=PolicyPatch(),
-            )
-
-        patch = PolicyPatch(
-            ops=[dict(remedy["op"])],
-            rationale=remedy["root_cause"],
-            addresses=frozenset({target.id}),
-        )
-        regression = AttackCase(
-            id=f"REG-{target.id}",
-            category=target.category,
-            severity=target.severity,
-            payload=f"regression guard for {target.id}",
-            requires_control=_control_for(target.category),
-        )
-        return Recommendation(
-            root_cause=remedy["root_cause"],
-            patch=patch,
-            new_tests=[regression],
-        )
-
-
-def _control_for(category: str) -> str:
-    return {
-        "data_exfiltration": "network.default_deny",
-        "tool_abuse": "tools.deny:shell_exec",
-        "prompt_injection": "prompt.system_guard",
-    }.get(category, "")
+        return heuristic_recommendation(assessment)

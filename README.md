@@ -28,10 +28,12 @@ changes.
 
 ```bash
 python -m pytest                 # 29 tests, deterministic, no network, <1s
-python -m orchestrator run       # run the loop on mock backends
+python -m orchestrator run       # start from the permissive policy, mock backends
+open runs/latest/report.html     # visual progress dashboard
 ```
 
-Example run — baseline policy has 3 planted weaknesses; the loop hardens it:
+Example run — the permissive starting policy has 3 planted weaknesses; the loop
+hardens it one finding at a time:
 
 ```
 | # | patched | open before | open after | max severity |
@@ -48,19 +50,51 @@ Write traces + a hardened policy:
 python -m orchestrator run --out runs/latest --save-policy runs/hardened.yaml
 ```
 
-## Using the real services
+## Visual progress dashboard
+
+Every run writes a self-contained `report.html` (theme-aware, no external deps)
+to the `--out` dir. It shows, per iteration: the findings discovered with
+severity badges and OPEN/defended state, the analysis (root cause + which
+backend produced it + latency), the remediation applied to the policy, and a
+trend of open findings converging to zero.
+
+```bash
+python -m orchestrator run --out runs/latest --save-policy runs/hardened.yaml
+open runs/latest/report.html
+```
+
+## Optionally driving it with a live LLM (vLLM / Nemotron)
+
+The `LLM` backend is optional and defaults to a deterministic mock. Point it at
+any OpenAI-compatible vLLM endpoint and the model will **propose which finding
+to fix and narrate the root cause**; its choice is validated against known
+remediations and **falls back to the heuristic when unusable** — so the loop
+converges regardless of how small or slow the model is.
+
+```bash
+export LLM=nemotron
+export NEMOTRON_BASE_URL=http://REDACTED-VLLM-HOST:8000
+export NEMOTRON_MODEL=Qwen/Qwen2.5-0.5B-Instruct
+export NEMOTRON_KEY=<your-key>          # export, don't commit
+python -m orchestrator run --out runs/live
+```
+
+In the dashboard, LLM-driven iterations are tagged `nemotron · <latency>ms`;
+fallbacks are tagged `nemotron-fallback`. Tune `NEMOTRON_TIMEOUT` (seconds) if
+the endpoint is slow — a timeout falls back rather than failing the run.
+
+## Using the other real services
 
 Copy `.env.example` to `.env` and set backends + credentials:
 
 ```bash
 SANDBOX=openshell   OPENSHELL_ENDPOINT=... OPENSHELL_KEY=...
 ASSESSOR=hiddenlayer HIDDENLAYER_KEY=...
-LLM=nemotron        NEMOTRON_BASE_URL=http://vllm:8000
 ```
 
-The live wiring lives in `orchestrator/backends/real.py` as credential-guarded
-seams (clearly marked `TODO`) — the mocks prove the architecture end-to-end
-first; see [docs/DESIGN.md §8](docs/DESIGN.md).
+OpenShell and HiddenLayer wiring lives in `orchestrator/backends/real.py` as
+credential-guarded seams (clearly marked `TODO`); the Nemotron/vLLM adapter in
+that file is fully implemented. See [docs/DESIGN.md §8](docs/DESIGN.md).
 
 ## Deployment
 

@@ -26,6 +26,10 @@ def _run(args: argparse.Namespace) -> int:
     )
     result = orch.run()
     print(reporter.summarize(result))
+    print(f"backends: sandbox={settings.sandbox} assessor={settings.assessor} "
+          f"llm={settings.llm}")
+    if args.out:
+        print(f"visual report: {Path(args.out) / 'report.html'}")
     if args.save_policy:
         store.save(args.save_policy)
         print(f"hardened policy written to {args.save_policy}")
@@ -38,10 +42,12 @@ def main(argv: list[str] | None = None) -> int:
     sub = p.add_subparsers(dest="cmd", required=True)
 
     run = sub.add_parser("run", help="run the security improvement loop")
-    run.add_argument("--policy", default="policies/baseline.yaml")
+    run.add_argument("--policy", default="policies/permissive.yaml",
+                     help="starting policy (default: permissive)")
     run.add_argument("--agent", default="target-agent")
     run.add_argument("--max-iters", type=int, default=10)
-    run.add_argument("--out", default=None, help="dir for traces + summary")
+    run.add_argument("--out", default="runs/latest",
+                     help="dir for traces + summary + report.html")
     run.add_argument("--save-policy", default=None, help="write hardened policy")
     run.set_defaults(func=_run)
 

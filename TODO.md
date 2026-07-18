@@ -43,8 +43,19 @@ Status: ☐ todo · ◐ in progress · ☑ done
 - ☑ GitHub Actions workflow: pytest on push
 - ☑ Coverage gate + fast deterministic suite
 
+## Milestone 7 — Live LLM + visual view (added)
+- ☑ Permissive starting policy (`policies/permissive.yaml`), now CLI default
+- ☑ NemotronLLM: live vLLM call, JSON parse, tolerant keyword match, heuristic
+     fallback (verified against dev endpoint, Qwen2.5-0.5B, ~250ms/iter)
+- ☑ Shared remediation module used by both mock and real adapters
+- ☑ Recommendation provenance (source/latency/narrative) threaded to reporter
+- ☑ Self-contained HTML dashboard (`report.html`): findings, remediation,
+     convergence trend; theme-aware
+- ☑ Published as shareable Artifact
+
 ## Backlog / stretch
 - ☐ Richer attack corpus (multi-turn, encoding, tool-chaining)
+- ☐ Try a larger model on the endpoint; measure how choices/narrative improve
 - ☐ Policy patch validity via constraint solver rather than heuristics
-- ☐ HTML dashboard for run reports
-- ☐ Real OpenShell/HiddenLayer/Nemotron live integration tests (needs creds)
+- ☐ Real OpenShell/HiddenLayer live integration (needs creds)
+- ☐ Tests for the vLLM adapter (deferred per request)
