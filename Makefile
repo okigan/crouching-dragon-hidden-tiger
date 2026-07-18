@@ -1,14 +1,16 @@
-.PHONY: test cov run docker-run clean
+.PHONY: test cov run ablate docker-run clean
 
 test:
-	python3 -m pytest
+	uv run pytest
 
 cov:
-	python3 -m pytest --cov=orchestrator --cov-report=term-missing
+	uv run pytest --cov=orchestrator --cov-report=term-missing
 
 run:
-	python3 -m orchestrator run --policy policies/baseline.yaml \
-		--out runs/latest --save-policy runs/hardened.yaml
+	uv run security-orchestrator run --out runs/latest --save-policy runs/hardened.yaml
+
+ablate:
+	uv run security-orchestrator ablate --out runs/ablation
 
 docker-run:
 	docker compose up --build orchestrator

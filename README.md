@@ -26,11 +26,17 @@ changes.
 
 ## Quickstart
 
+Uses [uv](https://docs.astral.sh/uv/) — it creates an isolated env and installs
+deps from the lockfile automatically, so there's nothing to `pip install`.
+
 ```bash
-python -m pytest                 # 29 tests, deterministic, no network, <1s
-python -m orchestrator run       # start from the permissive policy, mock backends
+uv run pytest                    # 29 tests, deterministic, no network, <1s
+uv run security-orchestrator run # start from the permissive policy, mock backends
 open runs/latest/report.html     # visual progress dashboard
 ```
+
+> No uv? The plain-Python path still works if PyYAML is installed:
+> `python3 -m orchestrator run`. All commands below show the uv form.
 
 Example run — the permissive starting policy has 3 planted weaknesses; the loop
 hardens it one finding at a time:
@@ -47,7 +53,7 @@ hardens it one finding at a time:
 Write traces + a hardened policy:
 
 ```bash
-python -m orchestrator run --out runs/latest --save-policy runs/hardened.yaml
+uv run security-orchestrator run --out runs/latest --save-policy runs/hardened.yaml
 ```
 
 ## Visual progress dashboard
@@ -59,7 +65,7 @@ backend produced it + latency), the remediation applied to the policy, and a
 trend of open findings converging to zero.
 
 ```bash
-python -m orchestrator run --out runs/latest --save-policy runs/hardened.yaml
+uv run security-orchestrator run --out runs/latest --save-policy runs/hardened.yaml
 open runs/latest/report.html
 ```
 
@@ -77,7 +83,7 @@ land) and its round-1 → round-N drop. The ablation runs enforcement ON vs OFF
 from the same start — the control that proves the *policy* stops the attacks:
 
 ```bash
-python -m orchestrator ablate --out runs/ablation
+uv run security-orchestrator ablate --out runs/ablation
 # ON  : 100% → 0%  (blue hardens, attacks blocked)
 # OFF : 100% → 100% (blue still patches, but enforcement disabled → no effect)
 # recursive-intelligence delta = +100%
@@ -99,7 +105,7 @@ export LLM=nemotron
 export NEMOTRON_BASE_URL=http://REDACTED-VLLM-HOST:8000
 export NEMOTRON_MODEL=Qwen/Qwen2.5-0.5B-Instruct
 export NEMOTRON_KEY=<your-key>          # export, don't commit
-python -m orchestrator run --out runs/live
+uv run security-orchestrator run --out runs/live
 ```
 
 In the dashboard, LLM-driven iterations are tagged `nemotron · <latency>ms`;

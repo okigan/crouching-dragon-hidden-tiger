@@ -12,6 +12,10 @@ dependencies = ["PyYAML>=6.0"]
 [project.optional-dependencies]
 dev = ["pytest>=8", "pytest-cov>=5"]
 
+# Installed by default under `uv run` / `uv sync` (no --extra needed).
+[dependency-groups]
+dev = ["pytest>=8", "pytest-cov>=5"]
+
 [project.scripts]
 security-orchestrator = "orchestrator.__main__:main"
 

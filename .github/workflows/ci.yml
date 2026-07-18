@@ -9,11 +9,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: astral-sh/setup-uv@v5
         with:
-          python-version: "3.12"
-      - run: pip install PyYAML>=6.0 pytest>=8 pytest-cov>=5
+          enable-cache: true
       - name: Run test suite (fast, deterministic, no network)
-        run: python -m pytest --cov=orchestrator --cov-report=term-missing --cov-fail-under=90
+        run: uv run pytest --cov=orchestrator --cov-report=term-missing --cov-fail-under=90
       - name: Smoke-run the improvement loop on mock backends
-        run: python -m orchestrator run --out runs/ci --save-policy runs/hardened.yaml
+        run: uv run security-orchestrator run --out runs/ci --save-policy runs/hardened.yaml
+      - name: Smoke-run the ablation harness
+        run: uv run security-orchestrator ablate --out runs/ci-ablation
