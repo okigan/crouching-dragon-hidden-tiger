@@ -1,4 +1,4 @@
-"""Core domain data model for the AI Security Validation Platform.
+"""Core domain data model for Crouching Dragon Hidden Tiger.
 
 Pure data + small pure helpers. No I/O, no backend imports — this module is the
 shared vocabulary every component (mock or real) speaks. See docs/DESIGN.md §2.

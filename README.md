@@ -1,4 +1,6 @@
-# AI Security Validation Platform
+# Crouching Dragon Hidden Tiger
+
+*AI Security Validation Platform.*
 
 A reproducible AI security lab that **continuously evaluates and improves the
 security posture of AI agents**. It runs a closed loop: deploy an agent under a

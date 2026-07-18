@@ -1,4 +1,4 @@
-AI Security Validation Platform
+Crouching Dragon Hidden Tiger — AI Security Validation Platform
 
 Objective
 

@@ -16,7 +16,7 @@ def test_reporter_writes_traces_and_summary(tmp_path):
     result = orch.run()
     summary = reporter.summarize(result)
 
-    assert "Security Validation Run" in summary
+    assert "Crouching Dragon Hidden Tiger" in summary
     assert "Converged: yes" in summary
     assert (tmp_path / "summary.md").exists()
     traces = json.loads((tmp_path / "traces.json").read_text())

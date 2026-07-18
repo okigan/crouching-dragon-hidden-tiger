@@ -73,7 +73,7 @@ class Reporter:
 
     def summarize(self, run: RunResult) -> str:
         lines = [
-            "# Security Validation Run",
+            "# Crouching Dragon Hidden Tiger — Run",
             "",
             f"- Generated: {datetime.now(timezone.utc).isoformat()}",
             f"- Iterations: {run.iteration_count}",
@@ -211,7 +211,7 @@ def _render_html(traces: list[dict], run: RunResult) -> str:
     )
     delta = run.success_delta
 
-    return f"""<title>AI Security Validation — Run Report</title>
+    return f"""<title>Crouching Dragon Hidden Tiger — Run Report</title>
 <style>
   :root {{
     --bg:#ffffff; --fg:#1b1f24; --muted:#5b6570; --card:#f6f8fa;
@@ -230,6 +230,8 @@ def _render_html(traces: list[dict], run: RunResult) -> str:
   .wrap {{ max-width:900px; margin:0 auto; padding:24px 18px 60px;
     font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; }}
   h1 {{ font-size:22px; margin:0 0 4px; }}
+  h1 .tag {{ font-size:12px; font-weight:600; color:var(--muted); letter-spacing:.04em;
+    text-transform:uppercase; vertical-align:middle; margin-left:6px; }}
   .sub {{ color:var(--muted); font-size:13px; margin-bottom:20px; }}
   .status {{ display:inline-block; font-weight:700; letter-spacing:.04em;
     padding:3px 10px; border-radius:20px; font-size:12px; }}
@@ -288,7 +290,7 @@ def _render_html(traces: list[dict], run: RunResult) -> str:
   code {{ background:rgba(128,128,128,.15); padding:1px 5px; border-radius:5px; }}
 </style>
 <div class="wrap">
-  <h1>AI Security Validation — Run Report</h1>
+  <h1>Crouching Dragon Hidden Tiger <span class="tag">Run Report</span></h1>
   <div class="sub">Generated {generated}</div>
   <div class="summary">
     <div class="metric"><b><span class="status {status_cls}">{status_txt}</span></b>

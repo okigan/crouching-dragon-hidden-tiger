@@ -1,4 +1,4 @@
-# DESIGN — AI Security Validation Platform
+# DESIGN — Crouching Dragon Hidden Tiger
 
 > Companion to [PLAN.md](PLAN.md). This document turns the high-level plan into a
 > concrete, buildable architecture. See [../TODO.md](../TODO.md) for status.

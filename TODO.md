@@ -1,4 +1,4 @@
-# TODO — AI Security Validation Platform
+# TODO — Crouching Dragon Hidden Tiger
 
 Tracking for implementing [docs/PLAN.md](docs/PLAN.md) per [docs/DESIGN.md](docs/DESIGN.md).
 Status: ☐ todo · ◐ in progress · ☑ done

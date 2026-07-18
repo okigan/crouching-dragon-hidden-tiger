@@ -1,4 +1,6 @@
-"""AI Security Validation Platform — Security Orchestrator package."""
+"""Crouching Dragon Hidden Tiger — AI Security Validation Platform.
+
+Security Orchestrator package."""
 
 from .loop import LoopConfig, SecurityOrchestrator
 from .policy_store import PolicyStore
