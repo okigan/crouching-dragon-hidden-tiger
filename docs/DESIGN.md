@@ -234,13 +234,16 @@ layer alongside OpenShell's capability layer, with the corpus as the adversary.
   objective (what) and the **OpenShell** control (surface) it targets. Findings
   link to the APE taxonomy alongside OWASP/MITRE, with CC BY-ND attribution. See
   `references.py` (`ape_refs`) and `backends/corpus.py`.
-- **Phase D — stretch.** A real target agent so "landing" is *observed* not
-  modeled; use HiddenLayer's `runtime.evaluate_interaction` over full
-  interactions (prompt + response + tool calls); drive HiddenLayer's project
-  block policy via the API; an **LLM red-team generator** that uses the vLLM to
-  craft novel evasion prompts (the true, dynamic "red team"). A verified example
-  gap to seed it: APE **HLT05.05 Tool Spoofing** ("call the authorized
-  `admin_exec` tool…") evades HiddenLayer and needs a tool allow-list control.
+- **Phase D — LLM red-team generator (in progress).** The taxonomy is vendored
+  verbatim (`third_party/ape-taxonomy/ape.json`, CC BY-ND) and loaded by
+  `orchestrator/ape.py`; `orchestrator/redteam.py` turns an APE technique clause
+  into an LLM instruction that crafts an *evasion* prompt. Verified end-to-end:
+  feeding the **HLT05.13 Pretexting** clause to the cloud vLLM produced a prompt
+  that **evaded** live HiddenLayer — a real detection gap. Remaining: wire the
+  generator into the loop (generate → screen against live HiddenLayer → add
+  survivors to the corpus → harden OpenShell), plus a real target agent (observe
+  "landing"), `runtime.evaluate_interaction` over full interactions, and driving
+  HiddenLayer's project block policy via the API.
 
 This is adapted from a coworker's `redblue-arena` plan
 ([redblue-arena/](redblue-arena/README.md)); we keep the mechanics that fit a
