@@ -1,0 +1,9 @@
+name = "redblue-arena-site"
+compatibility_date = "2026-07-01"
+account_id = "691fe25d377abac03627d6a88d3eeac9"
+
+[assets]
+directory = "./public"
+# Serves /redblue-arena/, /redblue-arena/guide/, /wiki/, /arch/, /visual/
+# Bind a route to hack.organizedai.vip/redblue-arena/* via the vanity router,
+# or deploy standalone and map the custom domain in the dashboard.

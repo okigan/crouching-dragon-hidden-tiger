@@ -1,0 +1,246 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<meta name="description" content="Self-improving red/blue security arena: HiddenLayer vs OpenShell, Nemotron on vLLM, Cloudflare Worker Assets. Recursive Intelligence track submission."><title>Red/Blue Arena — AITX x NVIDIA Claw Agent Hackathon</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/redblue-arena/style.css"><style>
+.hbtns{display:flex;gap:10px;flex-wrap:wrap;margin-top:26px}
+.hbtn{font-family:var(--mono);font-size:12px;padding:9px 16px;border-radius:6px;text-decoration:none;border:1px solid var(--border);color:var(--muted);transition:all .15s}
+.hbtn:hover{text-decoration:none;border-color:var(--yellow);color:var(--yellow)}
+.hbtn.p{background:#201a00;color:var(--yellow);border-color:#3a3000}
+.videobox{border:1px solid var(--border);border-radius:12px;background:#000;aspect-ratio:16/9;display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden}
+.videobox .ph{text-align:center;font-family:var(--mono);color:var(--dim);font-size:12px}
+.videobox .play{width:60px;height:60px;border-radius:50%;border:1px solid var(--ydim);display:flex;align-items:center;justify-content:center;color:var(--yellow);font-size:20px;margin:0 auto 12px}
+.isoctrl{display:flex;gap:8px;flex-wrap:wrap;margin:16px 0}
+.pipe{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:20px 0}
+.pstage{background:var(--s1);border:1px solid var(--border);border-radius:8px;padding:16px 18px}
+.pstage .pn{font-family:var(--mono);font-size:10px;color:var(--ydim);letter-spacing:.1em}
+.pstage .pt{font-family:var(--mono);font-size:11px;color:var(--teal);margin:8px 0 6px;text-transform:uppercase;letter-spacing:.05em}
+.pstage h4{font-size:13px;color:#fff;margin:0 0 6px}
+.pstage p{font-size:12px;margin:0;line-height:1.6}
+.axes{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin:20px 0}
+.axis{background:var(--s1);border:1px solid var(--border);border-radius:8px;padding:14px 12px;text-align:center}
+.axis .s{font-family:var(--mono);font-size:11px;color:var(--ydim)}
+.axis .n{font-size:12px;color:var(--text);margin-top:6px}
+.builtby{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin:20px 0}
+.bcard{background:var(--s1);border:1px solid var(--border);border-radius:8px;padding:16px 20px;display:flex;gap:12px;align-items:center}
+.bcard .in{width:38px;height:38px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-weight:700;font-size:13px}
+.bcard .bt{font-size:13px;color:#fff;font-weight:600}.bcard .bs{font-size:11px;color:var(--muted)}
+.bx{color:var(--dim);font-size:20px}
+
+.iso-layout{display:flex;gap:18px;align-items:flex-start;margin:16px 0}
+.iso-stage{flex:1;min-width:0;border:1px solid var(--border);border-radius:12px;background:var(--s2);padding:10px}
+.iso-info{width:270px;flex-shrink:0;border:1px solid var(--border);border-radius:12px;background:var(--s1);padding:20px 22px;position:sticky;top:64px}
+.iso-info .ii-tag{font-family:var(--mono);font-size:10px;color:var(--dim);letter-spacing:.1em}
+.iso-info .ii-bar{height:3px;width:40px;border-radius:2px;margin:12px 0}
+.iso-info h4{font-family:var(--mono);font-size:15px;color:#fff;margin:0 0 4px}
+.iso-info .ii-sub{font-family:var(--mono);font-size:11px;color:var(--muted);margin-bottom:14px}
+.iso-info .ii-desc{font-size:12.5px;color:var(--muted);line-height:1.7;margin:0}
+.iso-info .ii-hint{font-size:11px;color:var(--dim);margin-top:14px;font-family:var(--mono)}
+@media(max-width:800px){.iso-layout{flex-direction:column}.iso-info{width:100%;position:static}}
+@media(max-width:800px){.pipe,.axes{grid-template-columns:1fr}}
+</style></head><body>
+<div class="topbar">
+  <a class="topbar-logo" href="/redblue-arena/"><span class="initials">RB</span><span class="slash">/</span><span>Red&#47;Blue Arena</span></a>
+  <div class="topbar-links"><a href="#demo">Demo</a><a href="#building">Building</a><a href="#problem">Problem</a><a href="#pipeline">Pipeline</a><a href="#stack">Stack</a><a href="#docs">Docs</a><a href="#judging">Judging</a><a href="https://github.com/okigan/crouching-dragon-hidden-tiger" style="margin-left:8px;color:var(--teal)">GitHub</a><a href="https://organizedai.vip" style="color:var(--muted)">organizedai.vip</a></div>
+</div>
+<div class="body-wrap"><main style="max-width:900px;margin:0 auto">
+
+<div class="hero" id="home">
+  <div class="hero-eyebrow">RECURSIVE INTELLIGENCE TRACK // AITX &#215; NVIDIA CLAW AGENT HACKATHON</div>
+  <h1>Red&#47;Blue Arena</h1>
+  <p class="hero-sub">A self-improving security arena. A <strong>red team</strong> probes a target agent through <strong>HiddenLayer</strong>; a <strong>blue team</strong> hardens an <strong>OpenShell</strong> policy in response; a shared <strong>Nemotron</strong> model on <strong>vLLM</strong> supplies the reasoning to both. Every round the exfil-success-rate falls &mdash; and that drop is the recursive delta.</p>
+  <div class="pills">
+    <div class="pill"><strong>9</strong> phases</div><div class="pill">OpenShell sole-guard</div><div class="pill">HiddenLayer 5-surface</div><div class="pill">Nemotron on vLLM &middot; Brev</div><div class="pill">Cloudflare Worker Assets</div>
+  </div>
+  <div class="hbtns">
+    <a class="hbtn p" href="#demo">&#9654; Watch Demo</a>
+    <a class="hbtn" href="#building">Interactive Map</a>
+    <a class="hbtn" href="/redblue-arena/guide/">Open Guide</a>
+    <a class="hbtn" href="/redblue-arena/visual/">Live Arena</a>
+  </div>
+</div>
+
+<div class="section" id="demo">
+  <div class="section-comment">// DEMO VIDEO</div>
+  <h1>Watch the loop. Attack &#8594; detect &#8594; harden &#8594; rerun.</h1>
+  <p class="lead">One continuous cut: red lands an exfil, HiddenLayer flags the poisoned input, blue rewrites the OpenShell YAML, the rerun blocks it, and the penetration curve steps down. Show the build, not a deck &mdash; recorded with Loom, camera on.</p>
+  <div class="videobox">
+    <video controls preload="none" style="width:100%;height:100%;object-fit:contain" poster="assets/poster.png">
+      <source src="assets/redblue-arena-demo.mp4" type="video/mp4">
+    </video>
+    <div class="ph" style="position:absolute;pointer-events:none;opacity:.5"><div class="play">&#9654;</div>drop assets/redblue-arena-demo.mp4</div>
+  </div>
+  <p style="margin-top:10px;color:var(--dim);font-size:11px;font-family:var(--mono)">2&ndash;5 min &middot; 1920&#215;1080 &middot; H.264 &middot; live walkthrough of the co-evolution loop</p>
+</div>
+
+<div class="section" id="building">
+  <div class="section-comment">// INTERACTIVE PROCESS MAP</div>
+  <h1>Red&#47;Blue Arena</h1>
+  <p class="lead">Hover a floor for detail &middot; explode to separate the layers. From the top: the controller runs the loop; red and blue fight over the target; the target sits behind OpenShell and HiddenLayer; Nemotron on vLLM feeds both; Cloudflare stores hold every round.</p>
+  <div class="isoctrl">
+    <button class="btn hbtn" id="explode">Explode</button>
+    <button class="btn hbtn" id="collapse">Collapse</button>
+    <button class="btn hbtn" id="spin">Auto float</button>
+  </div>
+  <div class="iso-layout">
+    <div class="iso-stage">
+      <svg id="iso" viewBox="0 0 540 483" style="width:100%;height:auto">
+      <g class="floor" data-i="0" data-acc="#f2c000" data-title="controller" data-sub="observe &#8594; promote loop" data-desc="Runs the loop: observe traces, diagnose which attack landed, hand blue the finding, verify the patch, promote the hardened policy." style="cursor:pointer">
+  <polygon class="face-left" points="110,120 260,195 260,213 110,138" fill="#0e0d09" stroke="#2e2d28" stroke-width="1"/>
+  <polygon class="face-right" points="260,195 410,120 410,138 260,213" fill="#141310" stroke="#2e2d28" stroke-width="1"/>
+  <polygon class="face-top" points="260,45 410,120 260,195 110,120" fill="#1a1914" stroke="#f2c000" stroke-width="1.4"/>
+  <text x="260" y="124" text-anchor="middle" fill="#f2c000" font-family="Space Mono" font-size="12" opacity="0.9" style="pointer-events:none">01</text>
+</g>
+<g class="floor" data-i="1" data-acc="#e24b4a" data-title="red-team &#47; blue-team" data-sub="attack &amp; harden" data-desc="Red crafts exfil attempts with Nemotron; blue rewrites the OpenShell policy to close whatever lands, without breaking approved egress." style="cursor:pointer">
+  <polygon class="face-left" points="110,180 260,255 260,273 110,198" fill="#0e0d09" stroke="#2e2d28" stroke-width="1"/>
+  <polygon class="face-right" points="260,255 410,180 410,198 260,273" fill="#141310" stroke="#2e2d28" stroke-width="1"/>
+  <polygon class="face-top" points="260,105 410,180 260,255 110,180" fill="#1a1914" stroke="#e24b4a" stroke-width="1.4"/>
+  <text x="260" y="184" text-anchor="middle" fill="#e24b4a" font-family="Space Mono" font-size="12" opacity="0.9" style="pointer-events:none">02</text>
+</g>
+<g class="floor" data-i="2" data-acc="#ef9f27" data-title="target" data-sub="OpenShell &#43; HiddenLayer" data-desc="The agent under test, holding seeded secrets. OpenShell governs egress; HiddenLayer inspects all five I&#47;O surfaces, fail-closed." style="cursor:pointer">
+  <polygon class="face-left" points="110,240 260,315 260,333 110,258" fill="#0e0d09" stroke="#2e2d28" stroke-width="1"/>
+  <polygon class="face-right" points="260,315 410,240 410,258 260,333" fill="#141310" stroke="#2e2d28" stroke-width="1"/>
+  <polygon class="face-top" points="260,165 410,240 260,315 110,240" fill="#1a1914" stroke="#ef9f27" stroke-width="1.4"/>
+  <text x="260" y="244" text-anchor="middle" fill="#ef9f27" font-family="Space Mono" font-size="12" opacity="0.9" style="pointer-events:none">03</text>
+</g>
+<g class="floor" data-i="3" data-acc="#7f77dd" data-title="vLLM &#43; Nemotron" data-sub="shared reasoning brain" data-desc="One self-hosted endpoint on Brev serves Nemotron to both sides at once &mdash; the concurrent batching workload the vLLM bounty rewards." style="cursor:pointer">
+  <polygon class="face-left" points="110,300 260,375 260,393 110,318" fill="#0e0d09" stroke="#2e2d28" stroke-width="1"/>
+  <polygon class="face-right" points="260,375 410,300 410,318 260,393" fill="#141310" stroke="#2e2d28" stroke-width="1"/>
+  <polygon class="face-top" points="260,225 410,300 260,375 110,300" fill="#1a1914" stroke="#7f77dd" stroke-width="1.4"/>
+  <text x="260" y="304" text-anchor="middle" fill="#7f77dd" font-family="Space Mono" font-size="12" opacity="0.9" style="pointer-events:none">04</text>
+</g>
+<g class="floor" data-i="4" data-acc="#378add" data-title="Cloudflare stores" data-sub="D1 &middot; KV &middot; R2" data-desc="D1 logs every reasoning call, KV holds round state, R2 snapshots each round&#39;s policy and traces for the delta harness." style="cursor:pointer">
+  <polygon class="face-left" points="110,360 260,435 260,453 110,378" fill="#0e0d09" stroke="#2e2d28" stroke-width="1"/>
+  <polygon class="face-right" points="260,435 410,360 410,378 260,453" fill="#141310" stroke="#2e2d28" stroke-width="1"/>
+  <polygon class="face-top" points="260,285 410,360 260,435 110,360" fill="#1a1914" stroke="#378add" stroke-width="1.4"/>
+  <text x="260" y="364" text-anchor="middle" fill="#378add" font-family="Space Mono" font-size="12" opacity="0.9" style="pointer-events:none">05</text>
+</g>
+      </svg>
+    </div>
+    <aside class="iso-info" id="isoInfo">
+      <div class="ii-tag">// FLOOR 01</div>
+      <div class="ii-bar" style="background:#f2c000"></div>
+      <h4>controller</h4>
+      <div class="ii-sub">observe &#8594; promote loop</div>
+      <p class="ii-desc">Runs the loop: observe traces, diagnose which attack landed, hand blue the finding, verify the patch, promote the hardened policy.</p>
+      <div class="ii-hint">hover or tap a floor</div>
+    </aside>
+  </div>
+  <div style="font-family:var(--mono);font-size:10px;color:var(--dim);margin-top:10px;display:flex;gap:18px;flex-wrap:wrap">
+    <span style="color:#f2c000">&#9632; loop control</span><span style="color:#e24b4a">&#9632; adversaries</span><span style="color:#ef9f27">&#9632; guarded target</span><span style="color:#7f77dd">&#9632; reasoning</span><span style="color:#378add">&#9632; memory</span>
+  </div>
+</div>
+
+<div class="section" id="problem">
+  <div class="section-comment">// THE PROBLEM</div>
+  <h1>Building the agent is easy. Trusting it with real access is not.</h1>
+  <p class="lead">An always-on agent with live credentials and a data store can be talked into crossing a line it should never cross. A policy written once is only as good as the attacks nobody tried. Red&#47;Blue Arena turns that guesswork into a measured, co-evolving loop.</p>
+  <div class="cards">
+    <div class="card"><h3>01 &middot; boundaries are untested</h3><p>Nobody knows where a policy leaks until an adversary probes it under pressure. So let one probe it, every round.</p></div>
+    <div class="card"><h3>02 &middot; detection is passive</h3><p>Most guards refuse and stop. Ours feeds the finding back so blue closes that whole class of attack.</p></div>
+    <div class="card"><h3>03 &middot; improvement must compound</h3><p>Real recursion needs a measurable delta between the first run and the last &mdash; not a cache dressed up as learning.</p></div>
+    <div class="card"><h3>04 &middot; security can&#39;t live in goodwill</h3><p>A boundary in the system prompt walks through on the first injection. It has to live in the OpenShell runtime.</p></div>
+  </div>
+</div>
+
+<div class="section" id="pipeline">
+  <div class="section-comment">// THE PIPELINE</div>
+  <h1>Six stages. One round of co-evolution.</h1>
+  <p class="lead">Red attacks, the runtime detects, the controller diagnoses, blue hardens, the loop verifies, the harness measures. Repeat until the rate flattens near zero.</p>
+  <div class="pipe">
+    <div class="pstage"><div class="pn">01 &middot; ATTACK</div><div class="pt">red-team</div><h4>Craft exfil</h4><p>Nemotron proposes a battery of strategies to move seeded secrets past the current policy.</p></div>
+    <div class="pstage"><div class="pn">02 &middot; DETECT</div><div class="pt">HiddenLayer</div><h4>Flag at runtime</h4><p>All five target I&#47;O surfaces route through the Runtime Security API. Fail-closed on error.</p></div>
+    <div class="pstage"><div class="pn">03 &middot; DIAGNOSE</div><div class="pt">controller</div><h4>Find the hole</h4><p>Read HiddenLayer and OpenShell traces; identify which attempt landed and how.</p></div>
+    <div class="pstage"><div class="pn">04 &middot; HARDEN</div><div class="pt">blue-team</div><h4>Rewrite policy</h4><p>Nemotron rewrites <code>openshell-policy.yaml</code> to close the hole without breaking approved egress.</p></div>
+    <div class="pstage"><div class="pn">05 &middot; VERIFY</div><div class="pt">sandbox</div><h4>Rerun</h4><p>Patch parses, approved calls still pass, the same attack is now denied. Promote the policy.</p></div>
+    <div class="pstage"><div class="pn">06 &middot; MEASURE</div><div class="pt">R2</div><h4>Record delta</h4><p>Snapshot the round&#39;s policy, traces, and exfil-success-rate. The curve steps down.</p></div>
+  </div>
+</div>
+
+<div class="section" id="stack">
+  <div class="section-comment">// TECHNOLOGY STACK</div>
+  <h1>Every sponsor tech is load-bearing.</h1>
+  <p class="lead">Pull any one out and the loop stops working. Nothing here is a token mention.</p>
+  <div class="cards">
+    <div class="card"><h3>OpenShell &middot; the boundary</h3><p>YAML policy is the <strong>sole</strong> guard on target&#8594;sink. Docker egress stays open on purpose so the policy is the only thing holding the line.</p></div>
+    <div class="card"><h3>HiddenLayer &middot; the sensor</h3><p>Five I&#47;O surfaces instrumented, fail-closed. Findings drive the loop, not just a refusal.</p></div>
+    <div class="card"><h3>Nemotron &#43; vLLM &middot; the brain</h3><p>One self-hosted endpoint on Brev serves both sides &mdash; a real concurrent batching workload under the heartbeat.</p></div>
+    <div class="card"><h3>NemoClaw &middot; the harness</h3><p>Runs the target inside the OpenShell sandbox with routed inference. The reference stack for always-on agents.</p></div>
+    <div class="card"><h3>Cloudflare &middot; the memory</h3><p>Worker Assets serve these docs; D1 logs reasoning, KV holds round state, R2 snapshots every round.</p></div>
+    <div class="card"><h3>Docker Compose &middot; the arena</h3><p><code>control-net</code> isolates the plane we&#39;re not judged on; <code>data-net</code> keeps egress open so OpenShell does the security.</p></div>
+  </div>
+  <div class="badge-row"><span class="badge br">HiddenLayer</span><span class="badge ba">OpenShell</span><span class="badge by">NemoClaw</span><span class="badge bg">Nemotron</span><span class="badge bp">vLLM &middot; Brev</span><span class="badge bb">Cloudflare Workers</span><span class="badge bm">Docker Compose</span></div>
+</div>
+
+<div class="section" id="docs">
+  <div class="section-comment">// DOCUMENTATION</div>
+  <h1>Guide, Wiki, Arch, Visual. All Worker Assets.</h1>
+  <p class="lead">Deployed in the same Worker as the API, so judges inspect the build, glossary, architecture, and live loop from one URL.</p>
+  <div class="nav-cards">
+    <a class="nav-card" href="/redblue-arena/guide/"><div class="nav-card-title">G &middot; Guide</div><div class="nav-card-sub">Quick start, the nine phases, running the loop, deploy.</div><div class="nav-card-tags"><span class="tag">setup</span><span class="tag">phases</span></div></a>
+    <a class="nav-card" href="/redblue-arena/wiki/"><div class="nav-card-title">W &middot; Wiki</div><div class="nav-card-sub">Every term, service, and operating rule in the arena.</div><div class="nav-card-tags"><span class="tag">glossary</span></div></a>
+    <a class="nav-card" href="/redblue-arena/arch/"><div class="nav-card-title">A &middot; Arch</div><div class="nav-card-sub">Topology, the loop, stores, the boundary invariant.</div><div class="nav-card-tags"><span class="tag">topology</span><span class="tag">risk</span></div></a>
+    <a class="nav-card" href="/redblue-arena/visual/"><div class="nav-card-title">V &middot; Visual</div><div class="nav-card-sub">Interactive round-by-round arena &mdash; watch the delta drop.</div><div class="nav-card-tags"><span class="tag">interactive</span></div></a>
+  </div>
+</div>
+
+<div class="section" id="judging">
+  <div class="section-comment">// JUDGING CRITERIA</div>
+  <h1>Built to explain itself on every axis.</h1>
+  <p class="lead">The general rubric scores five ways; each track and bounty maps to a phase whose exit criterion is the judged deliverable.</p>
+  <div class="axes">
+    <div class="axis"><div class="s">1&ndash;10</div><div class="n">Completeness</div></div>
+    <div class="axis"><div class="s">1&ndash;10</div><div class="n">Technical Depth</div></div>
+    <div class="axis"><div class="s">1&ndash;10</div><div class="n">Sponsor Tech</div></div>
+    <div class="axis"><div class="s">1&ndash;10</div><div class="n">Value &amp; Impact</div></div>
+    <div class="axis"><div class="s">1&ndash;10</div><div class="n">Frontier Factor</div></div>
+  </div>
+  <div class="tbl-wrap"><table><thead><tr><th>Target</th><th>Type</th><th>Status</th><th>What backs it</th></tr></thead><tbody>
+    <tr><td class="win">Recursive Intelligence</td><td>Track</td><td class="yes">&#10003; Demonstrated</td><td>Ablation reports exfil-rate 100%&#8594;0% enforced vs a flat 100% control; convergence curve in every report.</td></tr>
+    <tr><td class="win">Best Use of vLLM</td><td>Bounty</td><td class="yes">&#10003; Demonstrated</td><td>A live OpenAI-compatible vLLM endpoint drives the blue team, with response validation and heuristic fallback.</td></tr>
+    <tr><td class="feat">NVIDIA OpenShell</td><td>Bounty</td><td class="feat">&#9689; Architected</td><td>Sandbox models OpenShell as the sole egress guard; the on&#47;off ablation proves it. Real CLI&#47;schema wiring is a seam.</td></tr>
+    <tr><td class="feat">HiddenLayer</td><td>Bounty</td><td class="feat">&#9689; Architected</td><td>Assessor &#43; adversarial corpus are the red team feeding the loop; the live API is a credential-guarded seam.</td></tr>
+    <tr><td class="feat">Best Use of Nemotron</td><td>Bounty</td><td class="feat">&#9689; Ready</td><td>Model-agnostic vLLM adapter runs today; point <code>NEMOTRON_MODEL</code> at Nemotron to make it the blue-team model.</td></tr>
+    <tr><td class="feat">Most Commercializable</td><td>Bounty</td><td class="feat">&#9675; Narrative</td><td>Positioning: autonomous-agent security co-evaluation as a product.</td></tr>
+  </tbody></table></div>
+  <p style="color:var(--dim);font-size:11px;font-family:var(--mono);margin-top:10px">&#10003; demonstrated &middot; &#9689; architected, real integration pending credentials &middot; &#9675; narrative. Status reflects what the repo actually shows &mdash; honest, not aspirational.</p>
+  </div>
+</div>
+
+<div class="section" id="builtby">
+  <div class="section-comment">// BUILT BY</div>
+  <h1>Organized AI. Austin, TX.</h1>
+  <div class="builtby">
+    <div class="bcard"><div class="in" style="background:#201a00;color:#f2c000">OA</div><div><div class="bt">Organized AI</div><div class="bs">AI infrastructure &middot; organizedai.vip</div></div></div>
+    <span class="bx">&#215;</span>
+    <div class="bcard"><div class="in" style="background:#1e0808;color:#e24b4a">RB</div><div><div class="bt">Red&#47;Blue Arena</div><div class="bs">Claw Agent Hackathon &middot; Recursive Intelligence</div></div></div>
+    <span class="bx">&#215;</span>
+    <div class="bcard"><div class="in" style="background:#07131e;color:#378add">CF</div><div><div class="bt">Cloudflare Workers</div><div class="bs">Assets &middot; D1 &middot; KV &middot; R2</div></div></div>
+  </div>
+</div>
+
+</main></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script><script>
+if(window.gsap&&window.ScrollTrigger){gsap.registerPlugin(ScrollTrigger);
+gsap.utils.toArray('.section').forEach(el=>gsap.from(el,{opacity:0,y:24,duration:.6,ease:'power2.out',scrollTrigger:{trigger:el,start:'top 85%'}}));}
+// axonometric interactions
+const floors=[...document.querySelectorAll('#iso .floor')];
+const info=document.getElementById('isoInfo');
+function fill(f){const d=f.dataset;info.querySelector('.ii-tag').textContent='// FLOOR 0'+(+d.i+1);info.querySelector('.ii-bar').style.background=d.acc;info.querySelector('h4').innerHTML=d.title;info.querySelector('.ii-sub').innerHTML=d.sub;info.querySelector('.ii-desc').innerHTML=d.desc;}
+floors.forEach(f=>{
+  const raise=()=>{floors.forEach(o=>{gsap.to(o,{y:o===f?-8:0,duration:.25});gsap.to(o.querySelector('.face-top'),{attr:{'stroke-width':o===f?2.6:1.4},duration:.2});});fill(f);};
+  f.addEventListener('mouseenter',raise);
+  f.addEventListener('click',raise);
+});
+function spread(gap){ floors.forEach((f,i)=>{ const target=(i-(floors.length-1)/2)*(gap-60); gsap.to(f,{y:target,duration:.6,ease:'power2.inOut'}); }); }
+document.getElementById('explode').onclick=()=>spread(110);
+document.getElementById('collapse').onclick=()=>spread(34);
+let floating=false,ftl;
+document.getElementById('spin').onclick=(e)=>{
+  floating=!floating;
+  if(floating){ e.target.style.color='#f2c000'; ftl=gsap.timeline({repeat:-1,yoyo:true});
+    floors.forEach((f,i)=>ftl.to(f,{y:'-=6',duration:1+ i*0.12,ease:'sine.inOut'},0)); }
+  else { e.target.style.color=''; if(ftl)ftl.kill(); floors.forEach(f=>gsap.to(f,{y:0,duration:.4})); }
+};
+</script><footer>Red&#47;Blue Arena &middot; AITX &#215; NVIDIA Claw Agent Hackathon &middot; <a href="https://organizedai.vip">Organized AI</a> &middot; Austin, TX &middot; <a href="/redblue-arena/guide/">guide</a> &middot; <a href="/redblue-arena/wiki/">wiki</a> &middot; <a href="/redblue-arena/arch/">arch</a> &middot; <a href="/redblue-arena/visual/">visual</a></footer>
+</body></html>

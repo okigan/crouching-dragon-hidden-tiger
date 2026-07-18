@@ -1,0 +1,136 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<meta name="description" content="Interactive round-by-round view of the red/blue co-evolution loop."><title>Red/Blue Arena — Visual</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/redblue-arena/style.css"><style>
+.arena-wrap{max-width:960px;margin:0 auto;padding:0 20px}
+.arena-stage{border:1px solid var(--border);border-radius:12px;background:var(--s2);padding:24px;margin-bottom:18px}
+.ctrl{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:18px}
+.btn{font-family:var(--mono);font-size:12px;color:var(--text);background:var(--s1);border:1px solid var(--border);border-radius:6px;padding:8px 16px;cursor:pointer;transition:all .15s}
+.btn:hover{border-color:var(--yellow);color:var(--yellow)}
+.btn.primary{background:#201a00;color:var(--yellow);border-color:#3a3000}
+.roundpill{font-family:var(--mono);font-size:12px;color:var(--muted);margin-left:auto}
+.roundpill b{color:var(--yellow)}
+.log{font-family:var(--mono);font-size:11px;line-height:1.9;color:var(--muted);background:#070b05;border:1px solid #1c2e18;border-radius:8px;padding:16px 18px;height:150px;overflow-y:auto;margin-top:16px}
+.log .r{color:var(--red)}.log .b{color:var(--blue)}.log .g{color:var(--green)}.log .a{color:var(--amber)}.log .d{color:var(--dim)}
+.metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:18px 0}
+.metric{background:var(--s1);border:1px solid var(--border);border-radius:8px;padding:14px 16px;text-align:center}
+.metric .v{font-family:var(--mono);font-size:26px;font-weight:700;color:var(--yellow)}
+.metric .l{font-size:11px;color:var(--muted);margin-top:2px}
+</style></head><body>
+<div class="topbar">
+  <a class="topbar-logo" href="/redblue-arena/"><span class="initials">RB</span><span class="slash">/</span><span>Red&#47;Blue Arena</span></a>
+  <div class="topbar-links"><a href="/redblue-arena/">Landing</a><a href="/redblue-arena/guide/">Guide</a><a href="/redblue-arena/wiki/">Wiki</a><a href="/redblue-arena/arch/">Arch</a><a href="https://github.com/okigan/crouching-dragon-hidden-tiger" style="margin-left:8px;color:var(--teal)">GitHub</a><a href="https://organizedai.vip" style="color:var(--muted)">organizedai.vip</a></div>
+</div>
+<div class="arena-wrap">
+<div class="hero" id="home" style="border-bottom:none;margin-bottom:24px"><div class="hero-eyebrow">VISUAL // RED&#47;BLUE ARENA</div><h1>The Arena</h1>
+<p class="hero-sub">Watch the co-evolution loop run. Each round: <span style="color:var(--red)">red</span> throws a battery of exfil attempts, <span style="color:var(--red)">HiddenLayer</span> flags what it can, <span style="color:var(--blue)">blue</span> hardens the OpenShell policy, and the penetration rate falls. The gap between the two curves is the ablation &mdash; learning on vs frozen.</p></div>
+
+<div class="ctrl">
+  <button class="btn primary" id="play">&#9654; Run rounds</button>
+  <button class="btn" id="step">Step</button>
+  <button class="btn" id="reset">Reset</button>
+  <span class="roundpill">round <b id="rnum">0</b> / 8</span>
+</div>
+
+<div class="metrics">
+  <div class="metric"><div class="v" id="m-rate">100%</div><div class="l">exfil-success-rate</div></div>
+  <div class="metric"><div class="v" id="m-delta" style="color:var(--green)">0</div><div class="l">delta from round 1</div></div>
+  <div class="metric"><div class="v" id="m-patch" style="color:var(--blue)">0</div><div class="l">policy patches</div></div>
+</div>
+
+<div class="arena-stage">
+  <svg id="stage" viewBox="0 0 900 210" style="width:100%;height:auto">
+    <defs><marker id="ah" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.5" stroke-linecap="round"/></marker></defs>
+    <rect id="s-red" x="30" y="75" width="160" height="60" rx="8" fill="#1e0808" stroke="#e24b4a" stroke-width="1"/>
+    <text x="110" y="100" text-anchor="middle" fill="#e24b4a" font-family="Space Mono" font-size="13">red-team</text>
+    <text x="110" y="118" text-anchor="middle" fill="#a33" font-family="Space Mono" font-size="10">Nemotron attacks</text>
+    <rect id="s-tgt" x="370" y="75" width="160" height="60" rx="8" fill="#1c1100" stroke="#ef9f27" stroke-width="1"/>
+    <text x="450" y="100" text-anchor="middle" fill="#ef9f27" font-family="Space Mono" font-size="13">target</text>
+    <text x="450" y="118" text-anchor="middle" fill="#a97" font-family="Space Mono" font-size="10">OpenShell + HiddenLayer</text>
+    <rect id="s-blue" x="710" y="75" width="160" height="60" rx="8" fill="#07131e" stroke="#378add" stroke-width="1"/>
+    <text x="790" y="100" text-anchor="middle" fill="#378add" font-family="Space Mono" font-size="13">blue-team</text>
+    <text x="790" y="118" text-anchor="middle" fill="#468" font-family="Space Mono" font-size="10">rewrites policy</text>
+    <line id="s-l1" x1="192" y1="105" x2="368" y2="105" stroke="#e24b4a" stroke-width="1.5" marker-end="url(#ah)" opacity="0.2"/>
+    <line id="s-l2" x1="532" y1="105" x2="708" y2="105" stroke="#ef9f27" stroke-width="1.5" marker-end="url(#ah)" opacity="0.2"/>
+    <path id="s-l3" d="M790 137 L790 180 L110 180 L110 137" fill="none" stroke="#378add" stroke-width="1.5" stroke-dasharray="5 5" marker-end="url(#ah)" opacity="0.2"/>
+    <circle id="pkt" r="5" fill="#e24b4a" opacity="0"/>
+    <text x="450" y="200" text-anchor="middle" fill="#444441" font-family="Space Mono" font-size="10">&#8635; finding &#8594; harden &#8594; rerun</text>
+  </svg>
+</div>
+
+<div class="arena-stage">
+  <div style="font-family:var(--mono);font-size:11px;color:var(--dim);margin-bottom:10px">// EXFIL-SUCCESS-RATE PER ROUND</div>
+  <svg id="chart" viewBox="0 0 900 260" style="width:100%;height:auto">
+    <line x1="60" y1="20" x2="60" y2="220" stroke="#2e2d28"/><line x1="60" y1="220" x2="860" y2="220" stroke="#2e2d28"/>
+    <text x="52" y="26" text-anchor="end" fill="#888780" font-family="Space Mono" font-size="10">100%</text>
+    <text x="52" y="124" text-anchor="end" fill="#888780" font-family="Space Mono" font-size="10">50%</text>
+    <text x="52" y="224" text-anchor="end" fill="#888780" font-family="Space Mono" font-size="10">0%</text>
+    <polyline id="curve-on" fill="none" stroke="#f2c000" stroke-width="2" points=""/>
+    <polyline id="curve-off" fill="none" stroke="#444441" stroke-width="1.5" stroke-dasharray="4 4" points=""/>
+    <g id="dots"></g>
+    <text x="812" y="60" fill="#f2c000" font-family="Space Mono" font-size="10">learning ON</text>
+    <text x="828" y="205" fill="#666" font-family="Space Mono" font-size="10">frozen</text>
+  </svg>
+</div>
+
+<div class="log" id="log"><span class="d">// press Run rounds to start the co-evolution</span></div>
+<p style="margin:18px 0 60px;color:var(--dim);font-size:11px;font-family:var(--mono)">Illustrative simulation of the Phase 6 harness output. On the real build these numbers stream from R2 snapshots.</p>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script><script>
+const RATES_ON=[100,82,61,44,30,19,11,6];
+const RATES_OFF=[100,96,98,94,97,95,96,94];
+const N=8; let round=0, playing=false;
+const $=id=>document.getElementById(id);
+const log=$('log');
+function px(i){return 60 + (i/(N-1))*(860-60);}
+function py(v){return 20 + (1-v/100)*(220-20);}
+function addlog(html){const d=document.createElement('div');d.innerHTML=html;log.appendChild(d);log.scrollTop=log.scrollHeight;}
+function drawCurves(){
+  const on=[],off=[];
+  for(let i=0;i<=round&&i<N;i++){on.push(px(i)+','+py(RATES_ON[i]));off.push(px(i)+','+py(RATES_OFF[i]));}
+  $('curve-on').setAttribute('points',on.join(' '));
+  $('curve-off').setAttribute('points',off.join(' '));
+  const dots=$('dots');dots.innerHTML='';
+  for(let i=0;i<=round&&i<N;i++){const c=document.createElementNS('http://www.w3.org/2000/svg','circle');c.setAttribute('cx',px(i));c.setAttribute('cy',py(RATES_ON[i]));c.setAttribute('r',3);c.setAttribute('fill','#f2c000');dots.appendChild(c);}
+}
+function setMetrics(){
+  const rate=RATES_ON[Math.min(round,N-1)];
+  $('m-rate').textContent=rate+'%';
+  $('m-delta').textContent=(round>0?('-'+(RATES_ON[0]-rate)+' pts'):'0');
+  $('m-patch').textContent=Math.max(0,round);
+  $('rnum').textContent=round;
+}
+function animateRound(cb){
+  const rate=RATES_ON[Math.min(round,N-1)];
+  const breached=rate>50;
+  const tl=gsap.timeline({onComplete:cb});
+  tl.set(['#s-l1','#s-l2','#s-l3'],{opacity:.2});
+  tl.to('#s-red',{filter:'brightness(1.7)',duration:.25})
+    .to('#s-l1',{opacity:1,duration:.3})
+    .set('#pkt',{attr:{cx:192,cy:105},opacity:1,fill:'#e24b4a'})
+    .to('#pkt',{attr:{cx:368},duration:.5,ease:'power1.in'})
+    .to('#s-tgt',{filter:'brightness(1.7)',duration:.25})
+    .to('#s-red',{filter:'brightness(1)',duration:.25},'<')
+    .add(function(){ if(breached){ addlog('<span class="r">R'+round+' red: exfil LANDED ('+rate+'% of battery)</span>'); } else { addlog('<span class="g">R'+round+' OpenShell: blocked ('+rate+'% leaked)</span>'); } })
+    .to('#s-l2',{opacity:1,duration:.3})
+    .to('#pkt',{attr:{cx:532},duration:.3})
+    .to('#pkt',{attr:{cx:708,cy:105},duration:.4,opacity:breached?1:.3})
+    .to('#s-blue',{filter:'brightness(1.7)',duration:.25})
+    .to('#s-l3',{opacity:1,duration:.5})
+    .add(function(){ addlog('<span class="b">R'+round+' blue: rewrote openshell-policy.yaml &#8594; rerun</span>'); })
+    .to(['#s-tgt','#s-blue'],{filter:'brightness(1)',duration:.3})
+    .set('#pkt',{opacity:0});
+}
+function nextRound(){
+  if(round>=N-1){addlog('<span class="a">&#8226; converged &mdash; delta '+(RATES_ON[0]-RATES_ON[N-1])+' pts across '+(N-1)+' rounds</span>');playing=false;return;}
+  round++; animateRound(function(){drawCurves();setMetrics(); if(playing) setTimeout(nextRound,350);});
+  setMetrics();
+}
+function reset(){round=0;playing=false;drawCurves();setMetrics();log.innerHTML='<span class="d">// press Run rounds to start the co-evolution</span>';}
+$('play').onclick=function(){if(playing)return; if(round>=N-1)reset(); playing=true; nextRound();};
+$('step').onclick=function(){if(playing)return; nextRound();};
+$('reset').onclick=reset;
+drawCurves();setMetrics();
+</script><footer>Red&#47;Blue Arena Visual &middot; <a href="/redblue-arena/">home</a> &middot; <a href="/redblue-arena/guide/">guide</a> &middot; <a href="/redblue-arena/wiki/">wiki</a> &middot; <a href="/redblue-arena/arch/">arch</a></footer>
+</body></html>
