@@ -14,7 +14,7 @@ COPY third_party ./third_party
 
 # Install our package (with the HiddenLayer extra) and the OpenShell CLI so the
 # OpenShellSandbox adapter can drive a gateway.
-RUN pip install --no-cache-dir ".[hiddenlayer]" openshell
+RUN pip install --no-cache-dir ".[hiddenlayer,web]" openshell
 
 # Real backends are the default in deployment; mocks are for the test suite.
 # Backend selection + credentials come from the environment (.env via compose).
