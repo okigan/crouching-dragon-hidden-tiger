@@ -73,20 +73,20 @@ Direct realization of PLAN.md "Workflow":
 
 ```mermaid
 flowchart TD
-    START([load initial policy]) --> DEPLOY[sandbox.deploy · agent + policy]
+    START(["load initial policy"]) --> DEPLOY["sandbox.deploy: agent + policy"]
     DEPLOY --> EFF{"enforce?"}
-    EFF -- "off (ablation)" --> UNGUARD[policy stripped:<br/>all attacks land]
-    EFF -- on --> GUARD[policy enforced]
+    EFF -- "off (ablation)" --> UNGUARD["policy stripped, all attacks land"]
+    EFF -- "on" --> GUARD["policy enforced"]
     UNGUARD --> ASSESS
-    GUARD --> ASSESS["assessor.assess<br/>RED · exfil-success-rate"]
-    ASSESS --> OPEN{open findings?}
-    OPEN -- none --> CONV([converged])
-    OPEN -- "same as last round" --> STALL([no-progress stop])
-    OPEN -- some --> ANALYZE["llm.analyze<br/>BLUE · root cause + patch"]
-    ANALYZE --> VALID{patch valid<br/>& tightens?}
-    VALID -- no --> NOREM([no applicable remediation])
-    VALID -- yes --> APPLY[policy_store.apply → new version]
-    APPLY --> GROW[assessor.add_tests · regression]
+    GUARD --> ASSESS["assessor.assess (RED): exfil-success-rate"]
+    ASSESS --> OPEN{"open findings?"}
+    OPEN -- "none" --> CONV(["converged"])
+    OPEN -- "same as last round" --> STALL(["no-progress stop"])
+    OPEN -- "some" --> ANALYZE["llm.analyze (BLUE): root cause + patch"]
+    ANALYZE --> VALID{"patch valid and tightens?"}
+    VALID -- "no" --> NOREM(["no applicable remediation"])
+    VALID -- "yes" --> APPLY["policy_store.apply, new version"]
+    APPLY --> GROW["assessor.add_tests: regression"]
     GROW --> DEPLOY
 
     class ASSESS red
