@@ -67,6 +67,18 @@ class Settings:
             )
         raise ValueError(f"unknown ASSESSOR={self.assessor}")
 
+    def build_generator(self):
+        """Red-team attack generator. Uses the vLLM when the LLM backend is
+        Nemotron and configured; otherwise a deterministic offline mock."""
+        from . import generator
+
+        if self.llm == "nemotron" and self.nemotron_base_url:
+            return generator.NemotronGenerator(
+                self.nemotron_base_url, self.nemotron_key,
+                self.nemotron_model, self.nemotron_timeout,
+            )
+        return generator.MockGenerator()
+
     def build_llm(self) -> LLM:
         if self.llm == "mock":
             return mock.MockLLM()

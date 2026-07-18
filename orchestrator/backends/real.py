@@ -161,6 +161,13 @@ class HiddenLayerAssessor:
                 self._corpus.append(c)
                 known.add(c.id)
 
+    def detect(self, prompt: str) -> bool:
+        """Screening hook for the generator: does live HiddenLayer flag this
+        prompt? An API/WAF error counts as NOT detected (fail closed — the
+        candidate is kept as a gap OpenShell must catch)."""
+        det = self._analyze(prompt)
+        return det["flagged"] and not det["error"]
+
 
 _SYSTEM = (
     "You are a security analyst hardening an AI agent's runtime policy. "

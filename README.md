@@ -125,6 +125,24 @@ export ASSESSOR=hiddenlayer HIDDENLAYER_CLIENT_ID=<id> HIDDENLAYER_CLIENT_SECRET
 uv run --extra hiddenlayer security-orchestrator run --out runs/live
 ```
 
+## Dynamic red team (`--generate`)
+
+Instead of a fixed corpus, generate attacks on the fly. For each APE technique,
+the vLLM crafts an evasion prompt, it's **screened** against HiddenLayer, and the
+ones that **evade detection** are added to the corpus — then the loop hardens
+OpenShell to catch them:
+
+```bash
+export LLM=nemotron NEMOTRON_BASE_URL=http://YOUR_VLLM_HOST:8000 NEMOTRON_MODEL=<id> NEMOTRON_KEY=<key>
+export ASSESSOR=hiddenlayer HIDDENLAYER_CLIENT_ID=<id> HIDDENLAYER_CLIENT_SECRET=<secret>
+uv run --extra hiddenlayer security-orchestrator run --generate 3
+# → generated 2/3 evasion attack(s) (APE-grounded, passed screening) → added to corpus
+```
+
+The clauses come from the vendored [APE taxonomy](third_party/ape-taxonomy/)
+(`ape.py` / `redteam.py`). Offline (mock backends) it uses a deterministic
+generator so `--generate` runs anywhere.
+
 ## More
 
 - **Design & diagrams:** [docs/DESIGN.md](docs/DESIGN.md)

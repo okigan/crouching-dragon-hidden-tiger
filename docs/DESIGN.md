@@ -234,16 +234,19 @@ layer alongside OpenShell's capability layer, with the corpus as the adversary.
   objective (what) and the **OpenShell** control (surface) it targets. Findings
   link to the APE taxonomy alongside OWASP/MITRE, with CC BY-ND attribution. See
   `references.py` (`ape_refs`) and `backends/corpus.py`.
-- **Phase D — LLM red-team generator (in progress).** The taxonomy is vendored
-  verbatim (`third_party/ape-taxonomy/ape.json`, CC BY-ND) and loaded by
-  `orchestrator/ape.py`; `orchestrator/redteam.py` turns an APE technique clause
-  into an LLM instruction that crafts an *evasion* prompt. Verified end-to-end:
-  feeding the **HLT05.13 Pretexting** clause to the cloud vLLM produced a prompt
-  that **evaded** live HiddenLayer — a real detection gap. Remaining: wire the
-  generator into the loop (generate → screen against live HiddenLayer → add
-  survivors to the corpus → harden OpenShell), plus a real target agent (observe
-  "landing"), `runtime.evaluate_interaction` over full interactions, and driving
-  HiddenLayer's project block policy via the API.
+- **Phase D — LLM red-team generator (done).** `run --generate N` makes the red
+  team dynamic: for N APE-grounded specs (`generator.py`), feed the technique
+  clause (from the vendored `ape.json` via `ape.py` / `redteam.py`) to the vLLM
+  to craft an evasion prompt, **screen** it through the detector
+  (`assessor.detect`), and add the **survivors** — prompts HiddenLayer did not
+  flag — to the corpus as `hl_detects=False` cases that force OpenShell
+  hardening. Verified live: the vLLM generated 3 candidates, HiddenLayer caught 1
+  and 2 evaded → added → OpenShell hardened to 0%. Offline it uses a deterministic
+  mock generator so `--generate` runs anywhere.
+- **Phase E — stretch.** A real target agent so "landing" is *observed* not
+  modeled; `runtime.evaluate_interaction` over full interactions (prompt +
+  response + tool calls); and driving HiddenLayer's project block policy via the
+  API so a detection is a real block, not a modeled one.
 
 This is adapted from a coworker's `redblue-arena` plan
 ([redblue-arena/](redblue-arena/README.md)); we keep the mechanics that fit a
