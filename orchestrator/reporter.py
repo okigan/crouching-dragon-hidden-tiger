@@ -355,6 +355,14 @@ def _iteration_card(trace: dict) -> str:
             f'<td>{hl_cell}</td><td>{os_cell}</td>'
             f'<td>{outcome}</td></tr>'
         )
+        # the executed prompt for this attack, shown under its row
+        prompt = f.get("payload", "")
+        if prompt:
+            finding_rows.append(
+                f'<tr class="promptrow {cls}"><td></td>'
+                f'<td colspan="5"><span class="attack-prompt">'
+                f'{html.escape(prompt)}</span></td></tr>'
+            )
     findings_table = (
         '<table class="findings"><thead><tr><th>ID</th><th>category</th>'
         "<th>severity</th><th>HiddenLayer</th><th>OpenShell</th>"
@@ -552,6 +560,11 @@ def _render_html(traces: list[dict], run: RunResult) -> str:
   .findings td {{ padding:5px 8px; border-bottom:1px solid var(--line);
     vertical-align:top; }}
   .findings tr.resolved td {{ opacity:.5; }}
+  .findings tr.promptrow td {{ border-bottom:1px solid var(--line); padding-top:0;
+    padding-bottom:8px; }}
+  .attack-prompt {{ color:var(--muted); font-size:12px; font-style:italic;
+    overflow-wrap:anywhere; }}
+  .attack-prompt::before {{ content:"↳ prompt: "; font-style:normal; opacity:.7; }}
   .findings .state {{ font-weight:700; font-size:11px; }}
   .findings tr.open .state {{ color:#e0733a; }}
   .findings .ev {{ color:var(--muted); }}
