@@ -11,13 +11,13 @@ before/after** you can put in front of anyone.
 ## What you get from one run
 
 ```bash
-uv run security-orchestrator run
+uv run security-orchestrator run --save-policy runs/latest/hardened.yaml
 ```
 
-- **A hardened OpenShell policy.** The starting policy (open egress, `shell_exec`
-  allowed, no injection guard) is rewritten into one that denies egress by
-  default, drops the dangerous tool, and enables the prompt guard — saved to
-  `runs/latest/`.
+- **A hardened OpenShell policy** (`runs/latest/hardened.yaml`). The starting
+  policy (open egress, `shell_exec` allowed, no injection guard) is rewritten
+  into one that denies egress by default, drops the dangerous tool, and enables
+  the prompt guard.
 - **A headline result: exfil-success-rate 100% → 0%.** Every attack lands at the
   start; none land at the end. That drop is the whole point.
 - **A visual report** (`runs/latest/report.html`) showing every round: what was
@@ -37,7 +37,9 @@ deterministic heuristic so the run is reproducible with zero setup.*
 ## The proof it isn't cheating: the ablation
 
 The NVIDIA OpenShell sandbox is the **sole guard** — an attack is stopped by the
-OpenShell policy, not by the harness. Run the same loop with enforcement ON vs
+OpenShell policy, not by the harness. (The default run enforces this with an
+OpenShell-compatible policy model; live OpenShell is a credential-guarded
+adapter — see the status table below.) Run the same loop with enforcement ON vs
 OFF:
 
 ```bash
@@ -77,8 +79,9 @@ It maps onto the four-component security stack from the original brief
 
 Each sits behind an interface with a **deterministic mock** (default, runs
 anywhere with no credentials) and a **real adapter** that swaps in via env — so
-the whole thing runs offline out of the box, and connects to the real services
-when you have them.
+the whole thing runs offline out of the box. The vLLM/Nemotron adapter is fully
+wired today; the OpenShell and HiddenLayer adapters are credential-guarded seams
+(see the status table below).
 
 ## Try it
 
