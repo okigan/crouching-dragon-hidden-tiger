@@ -158,6 +158,10 @@ class AttackCase:
     # HiddenLayer assessor overrides this with the real API verdict; the mock and
     # the offline default use it directly.
     hl_detects: bool = True
+    # Grounding in HiddenLayer's APE taxonomy (ape.hiddenlayer.com): which
+    # adversarial-prompt technique this attack uses (how) and objective (what).
+    ape_technique: str = ""  # e.g. "HLT05.13"
+    ape_objective: str = ""  # e.g. "HLG01.03"
 
 
 @dataclass

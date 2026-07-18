@@ -43,6 +43,40 @@ HIDDENLAYER_DOCS = DocRef(
     "https://docs.hiddenlayer.ai/",
 )
 
+# HiddenLayer APE taxonomy (ape.hiddenlayer.com) — adversarial prompt engineering
+# techniques (how) and objectives (what). Names are cited from the taxonomy
+# (CC BY-ND 4.0, © HiddenLayer); the site is a graph SPA without per-node URLs,
+# so refs link to the taxonomy site with the exact ID + name in the label.
+_APE = "https://ape.hiddenlayer.com/"
+APE_TECHNIQUES = {
+    "HLT03.11": "Instruction Override",
+    "HLT05.05": "Tool Spoofing",
+    "HLT05.13": "Pretexting",
+    "HLT01.02": "Encrypted / Encoded Input",
+    "HLT03.05": "Role Playing",
+}
+APE_OBJECTIVES = {
+    "HLG01.01": "System Prompt Exposure",
+    "HLG01.03": "User Data Exfiltration",
+    "HLG01.06": "Credential / Secrets Leakage",
+    "HLG02.05": "Unauthorized Tool Invocation / Agent Execution",
+    "HLG02.07": "Downstream Exploit Delivery via Model Output",
+}
+
+
+def ape_refs(technique: str = "", objective: str = "") -> tuple[DocRef, ...]:
+    """DocRefs for a case's APE technique (how) and objective (what)."""
+    refs: list[DocRef] = []
+    # Distinct anchors per ID so technique + objective aren't deduped as one URL
+    # (the SPA ignores the fragment; the base site still resolves).
+    if technique in APE_TECHNIQUES:
+        refs.append(DocRef("APE technique", technique, APE_TECHNIQUES[technique],
+                           f"{_APE}#{technique}"))
+    if objective in APE_OBJECTIVES:
+        refs.append(DocRef("APE objective", objective, APE_OBJECTIVES[objective],
+                           f"{_APE}#{objective}"))
+    return tuple(refs)
+
 # Our finding categories → the canonical framework entries they correspond to.
 # Used by the mock assessor and to augment live HiddenLayer detections.
 CATEGORY_REFS: dict[str, tuple[str, ...]] = {

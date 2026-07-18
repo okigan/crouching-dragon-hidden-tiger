@@ -35,7 +35,14 @@ attacks that passed through HiddenLayer and the OpenShell control that backstops
 each; the two-layer table shows, per round, whether **HiddenLayer** detected the
 payload and whether **OpenShell** blocked it (LANDED = evaded both). Each
 remediation expands to the exact **OpenShell config applied** and links to the
-**real documentation** (OWASP LLM Top-10, MITRE ATLAS, HiddenLayer docs).*
+**real documentation** — OWASP LLM Top-10, MITRE ATLAS, HiddenLayer docs, and the
+**HiddenLayer APE** technique/objective the attack uses.*
+
+The red team is grounded in two real references: HiddenLayer's [**APE
+taxonomy**](https://ape.hiddenlayer.com/) classifies each attack's technique
+(how) and objective (what), and each attack targets an **OpenShell** protection
+surface (egress, tools, prompt). The loop then captures which prompts **evade
+HiddenLayer detection** and which **escape OpenShell** — the detection gaps.
 
 ## Two layers of defense (and the ablation)
 

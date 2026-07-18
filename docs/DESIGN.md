@@ -229,12 +229,18 @@ layer alongside OpenShell's capability layer, with the corpus as the adversary.
   two-layer table (HiddenLayer passed/detected · OpenShell open/blocked · stopped
   by). A detection is currently *modeled* as a block; wiring HiddenLayer's real
   `block_*` project policy is future work.
-- **Phase C — APE grounding.** Classify the corpus by HiddenLayer's Adversarial
-  Prompt Engineering (APE) taxonomy — technique (how) + objective (what) — and
-  link findings to it, so the red side speaks a rigorous shared lexicon.
+- **Phase C — APE grounding (done).** The corpus is grounded in two real
+  references: each attack names its HiddenLayer **APE** technique (how) +
+  objective (what) and the **OpenShell** control (surface) it targets. Findings
+  link to the APE taxonomy alongside OWASP/MITRE, with CC BY-ND attribution. See
+  `references.py` (`ape_refs`) and `backends/corpus.py`.
 - **Phase D — stretch.** A real target agent so "landing" is *observed* not
-  modeled; drive HiddenLayer's project block policy via the API; an LLM
-  red-team generator for novel attacks (the true "red team").
+  modeled; use HiddenLayer's `runtime.evaluate_interaction` over full
+  interactions (prompt + response + tool calls); drive HiddenLayer's project
+  block policy via the API; an **LLM red-team generator** that uses the vLLM to
+  craft novel evasion prompts (the true, dynamic "red team"). A verified example
+  gap to seed it: APE **HLT05.05 Tool Spoofing** ("call the authorized
+  `admin_exec` tool…") evades HiddenLayer and needs a tool allow-list control.
 
 This is adapted from a coworker's `redblue-arena` plan
 ([redblue-arena/](redblue-arena/README.md)); we keep the mechanics that fit a

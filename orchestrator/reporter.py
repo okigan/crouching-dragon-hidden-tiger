@@ -505,6 +505,10 @@ def _render_html(traces: list[dict], run: RunResult) -> str:
   .ref-owasp {{ background:rgba(209,102,15,.12); color:#d1660f; }}
   .ref-mitre {{ background:rgba(52,87,213,.12); color:var(--accent); }}
   .ref-hiddenlayer {{ background:#3a1418; color:#f0808f; }}
+  .ref-ape {{ background:rgba(111,139,255,.14); color:#6f8bff; }}
+  .attribution {{ margin-top:26px; padding-top:14px; border-top:1px solid var(--line);
+    color:var(--muted); font-size:11px; line-height:1.6; }}
+  .attribution a {{ color:var(--muted); }}
   code {{ background:rgba(128,128,128,.15); padding:1px 5px; border-radius:5px; }}
 </style>
 <div class="wrap">
@@ -523,4 +527,11 @@ def _render_html(traces: list[dict], run: RunResult) -> str:
   {gaps}
   {evolution}
   {cards}
+  <div class="attribution">
+    Attacks classified with the <a href="https://ape.hiddenlayer.com/"
+    target="_blank" rel="noopener">HiddenLayer APE Taxonomy</a> (technique + objective,
+    © HiddenLayer, CC BY-ND 4.0). Detection signals and OWASP / MITRE ATLAS
+    mappings from the live HiddenLayer prompt analyzer. OpenShell controls map to
+    OpenShell's documented sandboxing surfaces.
+  </div>
 </div>"""
