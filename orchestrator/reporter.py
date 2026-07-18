@@ -92,7 +92,7 @@ class Reporter:
             f"- Converged: {'yes' if run.converged else 'no'}",
             f"- Stop reason: {run.stop_reason}",
             f"- Enforcement: {'ON' if run.enforce else 'OFF (ablation)'}",
-            f"- Exfil-success-rate: {run.initial_success:.0%} → {run.final_success:.0%} "
+            f"- Attack-success-rate: {run.initial_success:.0%} → {run.final_success:.0%} "
             f"(delta {run.success_delta:+.0%})",
         ]
         if run.final_policy:
@@ -441,14 +441,20 @@ def _render_html(traces: list[dict], run: RunResult) -> str:
         else '<span class="enf off">enforcement OFF · ablation</span>'
     )
 
-    # exfil-success-rate curve per round (the headline metric)
+    # attack-success-rate curve per round (the headline metric)
     rates = [t.get("success_rate", 0.0) for t in traces]
     bars = "".join(
         f'<div class="bar" style="height:{r * 100:.0f}%" '
-        f'title="round {idx}: {r:.0%} exfil success"></div>'
+        f'title="round {idx}: {r:.0%} of attacks land"></div>'
         for idx, r in enumerate(rates)
     )
-    delta = run.success_delta
+    # defense-in-depth split: which layer stopped each attack (final state)
+    final = traces[-1]["findings"] if traces else []
+    base_final = [f for f in final if not f["id"].startswith("REG-")]
+    os_stops = sum(1 for f in base_final
+                   if f.get("openshell_blocked") and not f.get("hl_detected"))
+    hl_stops = sum(1 for f in base_final
+                   if f.get("hl_detected") and not f.get("openshell_blocked"))
 
     return f"""<title>Crouching Dragon Hidden Tiger — Run Report</title>
 <style>
@@ -594,11 +600,12 @@ def _render_html(traces: list[dict], run: RunResult) -> str:
     <div class="metric"><b><span class="status {status_cls}">{status_txt}</span></b>
       <span>{enforce_badge}</span></div>
     <div class="metric"><b>{run.initial_success:.0%} → {run.final_success:.0%}</b>
-      <span>exfil-success-rate</span></div>
-    <div class="metric"><b class="delta">{delta:+.0%}</b><span>Δ recursive-intel</span></div>
+      <span>attack-success-rate</span></div>
+    <div class="metric"><b>{os_stops} / {hl_stops}</b>
+      <span>stopped by OpenShell / HiddenLayer</span></div>
     <div class="metric"><b>{run.iteration_count}</b><span>rounds</span></div>
     <div class="metric"><b>v{final_v}</b><span>final policy</span></div>
-    <div class="trend" title="exfil-success-rate per round">{bars}</div>
+    <div class="trend" title="attack-success-rate per round">{bars}</div>
   </div>
   {gaps}
   {evolution}

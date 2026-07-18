@@ -50,7 +50,7 @@ def _format(enforced: RunResult, ablated: RunResult, base: Path | None) -> str:
     lines = [
         "# Recursive-Intelligence Ablation",
         "",
-        "| enforcement | rounds | exfil-success start → end | delta | converged |",
+        "| enforcement | rounds | attack-success start → end | delta | converged |",
         "|-------------|--------|---------------------------|-------|-----------|",
         f"| ON  | {enforced.iteration_count} | "
         f"{enforced.initial_success:.0%} → {enforced.final_success:.0%} | "
