@@ -1,23 +1,80 @@
-# Reproducible security-testing environment (PLAN.md "Deployment").
+# Reproducible security lab: real NVIDIA OpenShell gateway + orchestrator.
 #
-#   docker compose up orchestrator          # self-contained, mock backends
-#   docker compose --profile gpu up vllm     # opt-in real Nemotron endpoint
+#   docker compose up openshell-gateway     # real OpenShell sandbox runtime
+#   docker compose up orchestrator          # the loop (needs backends via .env)
 #
-# Real OpenShell/HiddenLayer/Nemotron are selected via .env (see .env.example).
+# The gateway enforces policy at the kernel level (seccomp / Landlock / network
+# namespaces). HiddenLayer + vLLM are selected/credentialed via .env
+# (see .env.example). Mock backends are for the test suite, not deployment.
+
+volumes:
+  openshell_state:
 
 services:
+  # One-shot: generate the sandbox-JWT signing keys the gateway needs, into the
+  # shared state volume (idempotent enough for dev — regenerates on re-up).
+  openshell-jwt-init:
+    image: ghcr.io/nvidia/openshell/gateway:latest
+    user: "0"
+    entrypoint:
+      - /usr/local/bin/openshell-gateway
+      - generate-certs
+      - --output-dir=/var/lib/openshell/tls
+      - --server-san=127.0.0.1
+      - --server-san=localhost
+      - --server-san=host.openshell.internal
+    volumes:
+      - openshell_state:/var/lib/openshell
+    restart: "no"
+
+  # The real OpenShell gateway (prebuilt image). Spawns sandbox containers via
+  # the host Docker socket; enforces the loaded policy.yaml for real.
+  openshell-gateway:
+    image: ghcr.io/nvidia/openshell/gateway:latest
+    command: []              # clear default CMD so gateway.toml bind wins
+    user: "0"
+    depends_on:
+      openshell-jwt-init:
+        condition: service_completed_successfully
+    ports:
+      - "127.0.0.1:8080:8080"
+      - "127.0.0.1:8081:8081"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - openshell_state:/var/lib/openshell
+      - ./deploy/openshell/gateway.toml:/etc/openshell/gateway.toml:ro
+    environment:
+      OPENSHELL_GATEWAY_CONFIG: /etc/openshell/gateway.toml
+      OPENSHELL_DB_URL: "sqlite:/var/lib/openshell/gateway.db?mode=rwc"
+      XDG_DATA_HOME: /var/lib/openshell
+      HOME: /var/lib/openshell
+    extra_hosts:
+      - "host.openshell.internal:host-gateway"
+    restart: unless-stopped
+
+  # The security-improvement loop. Talks to the gateway (real OpenShell), and to
+  # HiddenLayer + vLLM per .env. Mocks are test-only; a deployment sets real
+  # backends. Requires the OpenShell adapter wiring (in progress).
   orchestrator:
     build: .
+    depends_on:
+      - openshell-gateway
     env_file:
       - path: .env
         required: false
+    environment:
+      SANDBOX: openshell
+      OPENSHELL_GATEWAY_ENDPOINT: http://host.docker.internal:8080
+      OPENSHELL_GATEWAY_INSECURE: "true"
+      # ASSESSOR=hiddenlayer / LLM=nemotron + credentials come from .env
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - ./runs:/app/runs
       - ./policies:/app/policies
-    # depends_on vllm only when you opt into the gpu profile + LLM=nemotron.
 
-  # Nemotron served via vLLM, OpenAI-compatible API. Opt-in: needs a GPU + NGC
-  # access. Enable with:  docker compose --profile gpu up
+  # Optional: self-host Nemotron on vLLM (GPU). Opt-in profile. For dev we point
+  # NEMOTRON_BASE_URL at an existing endpoint via .env instead.
   vllm:
     image: vllm/vllm-openai:latest
     profiles: ["gpu"]
