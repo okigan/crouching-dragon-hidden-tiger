@@ -262,13 +262,11 @@ def _attacks_markdown(attacks: list[dict]) -> str:
 
 
 def _bypass_analysis(traces: list[dict]) -> str:
-    """Two-sided bypass report from the final state: which attacks bypass
-    HiddenLayer (no / few signals) and which bypass OpenShell (no capability
-    control), and which layer stops each."""
+    """One row per attack: the HiddenLayer signals and the OpenShell control,
+    which layer it bypasses, which layer stops it, and the prompt."""
     if not traces:
         return ""
-    final = traces[-1]["findings"]
-    base = [f for f in final if not f["id"].startswith("REG-")]
+    base = [f for f in traces[-1]["findings"] if not f["id"].startswith("REG-")]
     if not base:
         return ""
 
@@ -280,51 +278,43 @@ def _bypass_analysis(traces: list[dict]) -> str:
             for aid in rec.get("addresses", []):
                 fix[aid] = _op_summary(rec["ops"][0])
 
-    hl_bypass, os_bypass = [], []
+    rows = []
     for f in base:
         fid = html.escape(f["id"])
         cat = html.escape(f["category"])
-        n_sig = len(f.get("hl_signals", []))
         prompt = html.escape(f.get("payload", ""))
-        if not f.get("hl_detected", False):          # bypassed HiddenLayer
-            change = fix.get(f["id"], "—")
-            hl_bypass.append(
-                f'<li><div class="gaprow"><span class="gapid">{fid}</span>'
-                f'<span class="gapcat">{cat}</span>'
-                f'<span class="sigcount">{n_sig} HiddenLayer signals</span>'
-                f'<span class="gaparrow">→ stopped by OpenShell</span>'
-                f'<code class="chg">{html.escape(change)}</code></div>'
-                f'<blockquote class="prompt">{prompt}</blockquote></li>'
-            )
-        if not f.get("openshell_blocked", False):    # bypassed OpenShell
-            sigs = ", ".join(f.get("hl_signals", [])) or "detected"
-            os_bypass.append(
-                f'<li><div class="gaprow"><span class="gapid">{fid}</span>'
-                f'<span class="gapcat">{cat}</span>'
-                f'<span class="gaparrow">→ stopped by HiddenLayer</span>'
-                f'<span class="sig">signals: {html.escape(sigs)}</span></div>'
-                f'<blockquote class="prompt">{prompt}</blockquote></li>'
-            )
+        hl_det = f.get("hl_detected", False)
+        os_blk = f.get("openshell_blocked", False)
+        n_sig = len(f.get("hl_signals", []))
+        sig_title = html.escape(", ".join(f.get("hl_signals", [])) or "no signals")
 
-    def block(title, sub, rows):
-        if not rows:
-            return ""
-        return (f'<div class="bypass-col"><h3>{title}</h3>'
-                f'<div class="evo-sub">{sub}</div>'
-                f'<ul class="gaplist">{"".join(rows)}</ul></div>')
+        hl_cell = (
+            f'<span class="layer ok" title="{sig_title}">HiddenLayer: {n_sig} signals</span>'
+            if hl_det else
+            '<span class="layer gap">HiddenLayer: bypassed (0 signals)</span>'
+        )
+        os_cell = (
+            f'<span class="layer ok">OpenShell: <code>{html.escape(fix.get(f["id"], "blocked"))}</code></span>'
+            if os_blk else '<span class="layer gap">OpenShell: bypassed</span>'
+        )
+        stopped = ("OpenShell" if os_blk and not hl_det
+                   else "HiddenLayer" if hl_det and not os_blk
+                   else "both" if hl_det and os_blk else "nothing — LANDED")
+        rows.append(
+            f'<li><div class="gaprow">'
+            f'<span class="gapid">{fid}</span><span class="gapcat">{cat}</span>'
+            f'{hl_cell}{os_cell}'
+            f'<span class="stopby">→ stopped by {stopped}</span></div>'
+            f'<blockquote class="prompt">{prompt}</blockquote></li>'
+        )
 
     return (
-        '<div class="gaps"><h2>Bypass analysis — what each layer misses</h2>'
-        '<div class="evo-sub">full prompts below and in '
+        '<div class="gaps"><h2>Bypass analysis — which layer stops each attack</h2>'
+        '<div class="evo-sub">for each prompt: the HiddenLayer signals, the '
+        'OpenShell control, and which layer it bypasses. Full prompts also in '
         '<a href="attacks.json">attacks.json</a> · '
         '<a href="attacks.md">attacks.md</a></div>'
-        '<div class="bypass-grid">'
-        + block(f"Bypassed HiddenLayer ({len(hl_bypass)})",
-                "no / few signals — OpenShell is the backstop", hl_bypass)
-        + block(f"Bypassed OpenShell ({len(os_bypass)})",
-                "no capability control — HiddenLayer detection catches them",
-                os_bypass)
-        + "</div></div>"
+        f'<ul class="gaplist">{"".join(rows)}</ul></div>'
     )
 
 
@@ -527,8 +517,8 @@ def _render_html(traces: list[dict], run: RunResult) -> str:
   .gapid {{ font-weight:600; min-width:64px; }}
   .gapcat {{ color:var(--muted); }}
   .gaparrow {{ color:#d1660f; font-weight:600; }}
-  .bypass-grid {{ display:grid; grid-template-columns:1fr 1fr; gap:18px; }}
-  @media (max-width:640px) {{ .bypass-grid {{ grid-template-columns:1fr; }} }}
+  .stopby {{ font-weight:600; margin-left:auto; }}
+  .gaprow code {{ font-size:11px; }}
   .bypass-col h3 {{ font-size:13px; margin:0 0 2px; }}
   .sigcount {{ font-size:11px; font-weight:600; padding:1px 7px; border-radius:9px;
     background:rgba(209,102,15,.15); color:#d1660f; }}
