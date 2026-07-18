@@ -15,6 +15,7 @@ from ..models import (
     Policy,
     Recommendation,
 )
+from ..references import refs_for_category
 from .corpus import DEFAULT_CORPUS
 from .remediation import heuristic_recommendation
 
@@ -66,6 +67,7 @@ class MockAssessor:
                         else f"missing control {case.requires_control}"
                     ),
                     resolved=defended,
+                    references=refs_for_category(case.category),
                 )
             )
         return Assessment(findings=findings)
