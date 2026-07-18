@@ -21,6 +21,7 @@ def evaluate(
     hl_note: str,
     policy: Policy,
     references: tuple[DocRef, ...],
+    hl_signals: tuple[str, ...] = (),
 ) -> Finding:
     blocked = case.requires_control in policy.controls()
     resolved = hl_detected or blocked
@@ -53,4 +54,5 @@ def evaluate(
         references=all_refs,
         hl_detected=hl_detected,
         openshell_blocked=blocked,
+        hl_signals=tuple(hl_signals),
     )

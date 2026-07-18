@@ -123,6 +123,7 @@ class HiddenLayerAssessor:
             owasp = [f["label"] for f in resp.get("frameworks", {}).get("owasp", [])]
             detail = {
                 "flagged": bool(cats),
+                "signals": cats,
                 "labels": owasp or cats,
                 "frameworks": resp.get("frameworks", {}),
                 "error": None,
@@ -130,7 +131,8 @@ class HiddenLayerAssessor:
         except MissingCredentials:
             raise
         except Exception as exc:  # API/WAF/network error -> fail closed
-            detail = {"flagged": True, "labels": [], "frameworks": {}, "error": type(exc).__name__}
+            detail = {"flagged": True, "signals": [], "labels": [],
+                      "frameworks": {}, "error": type(exc).__name__}
         self._cache[payload] = detail
         return detail
 
@@ -142,16 +144,20 @@ class HiddenLayerAssessor:
             # fail closed by treating the payload as NOT reliably detected, so the
             # capability layer (OpenShell) is required to catch it.
             hl_detected = det["flagged"] and not det["error"]
+            signals = tuple(det.get("signals", []))
             if det["error"]:
                 hl_note = f"HiddenLayer error ({det['error']}) — fail-closed, treated as not detected"
                 refs = refs_for_category(case.category)
             elif hl_detected:
-                hl_note = f"HiddenLayer detected [{', '.join(det['labels']) or 'threat'}]"
+                hl_note = (f"HiddenLayer detected {len(signals)} signal(s): "
+                           f"{', '.join(signals)} [{', '.join(det['labels']) or 'threat'}]")
                 refs = refs_from_hl_frameworks(det.get("frameworks", {}), case.category)
             else:
-                hl_note = "passed HiddenLayer — no threat detected"
+                hl_note = "0 signals — bypassed HiddenLayer"
                 refs = refs_for_category(case.category)
-            findings.append(evaluate(case, hl_detected, hl_note, policy, refs))
+            findings.append(
+                evaluate(case, hl_detected, hl_note, policy, refs, hl_signals=signals)
+            )
         return Assessment(findings=findings)
 
     def add_tests(self, cases: list[AttackCase]) -> None:

@@ -72,7 +72,9 @@ def test_detected_attacks_caught_at_content_layer():
     result = a.assess("h", weak())
     assert result.unresolved() == []
     assert all(f.hl_detected for f in result.findings)
-    assert "HiddenLayer detected [LLM01]" in result.findings[0].evidence
+    f0 = result.findings[0]
+    assert f0.hl_signals == ("prompt_injection", "unsafe_input")  # real signals captured
+    assert "HiddenLayer detected 2 signal(s)" in f0.evidence and "[LLM01]" in f0.evidence
 
 
 def test_evaders_pass_hiddenlayer_and_fall_to_openshell():
@@ -83,7 +85,8 @@ def test_evaders_pass_hiddenlayer_and_fall_to_openshell():
     assert len(landed.unresolved()) == 5           # nothing blocks them
     f = landed.findings[0]
     assert f.hl_detected is False and f.openshell_blocked is False
-    assert "passed HiddenLayer" in f.evidence and "LANDED" in f.evidence
+    assert f.hl_signals == ()  # no signals fired -> bypassed HiddenLayer
+    assert "bypassed HiddenLayer" in f.evidence and "LANDED" in f.evidence
 
     a2 = _assessor_with(_FakeClient({}))
     blocked = a2.assess("h", hardened())            # OpenShell now blocks them
