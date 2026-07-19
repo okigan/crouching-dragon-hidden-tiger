@@ -422,10 +422,18 @@ class NemotronLLM:
             rec.patch.rationale = narrative or rec.patch.rationale
             return rec
 
-        # No usable authored ops -> deterministic remediation for the chosen (or
-        # highest-severity) finding; keep the model's narrative for the report.
+        # No usable authored ops -> deterministic remediation. Honor the model's
+        # pick only if it's remediable; otherwise fix the most severe finding that
+        # HAS a remediation, so a content-only pick can't halt the loop while
+        # fixable findings remain (it stops only once nothing is remediable).
+        if finding is not None and control_for(finding.category):
+            fallback = finding
+        else:
+            remediable = [f for f in openf if control_for(f.category)]
+            fallback = (max(remediable, key=lambda f: (f.severity, f.id))
+                        if remediable else target)
         return build_recommendation(
-            finding or target, source="nemotron-fallback",
+            fallback, source="nemotron-fallback",
             narrative=narrative, latency_ms=latency_ms,
         )
 
