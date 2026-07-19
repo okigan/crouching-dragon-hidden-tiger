@@ -63,6 +63,10 @@ class Finding:
     # inside the live sandbox (not inferred from the policy). See DESIGN §9.
     openshell_observed: bool = False
     egress_host: str = ""            # the real host the egress probe targeted
+    # APE grounding carried from the AttackCase so the report can show which
+    # taxonomy technique (how) / objective (what) each attack exercises.
+    ape_technique: str = ""          # e.g. "HLT05.13"
+    ape_objective: str = ""          # e.g. "HLG01.03"
 
     def resolve(self) -> "Finding":
         return replace(self, resolved=True)

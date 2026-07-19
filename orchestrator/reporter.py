@@ -66,6 +66,8 @@ class Reporter:
                     "openshell_blocked": f.openshell_blocked,
                     "openshell_observed": f.openshell_observed,
                     "egress_host": f.egress_host,
+                    "ape_technique": f.ape_technique,
+                    "ape_objective": f.ape_objective,
                     "hl_signals": list(f.hl_signals),
                     "evidence": f.evidence,
                     "references": [
@@ -309,9 +311,14 @@ def _iteration_card(trace: dict) -> str:
             outcome = '<span class="state osonly">OpenShell</span>'
         else:
             outcome = '<span class="state">both</span>'
+        tech, obj = f.get("ape_technique", ""), f.get("ape_objective", "")
+        ape_tag = (f'<span class="apetag" title="APE technique {html.escape(tech)}'
+                   f' × objective {html.escape(obj)}">{html.escape(tech)}'
+                   f'{" · " + html.escape(obj) if obj else ""}</span>' if tech else "")
+        cat_cell = f'{html.escape(f["category"])}{ape_tag}'
         finding_rows.append(
             f'<tr class="{cls}"><td>{html.escape(f["id"])}</td>'
-            f'<td>{html.escape(f["category"])}</td>'
+            f'<td>{cat_cell}</td>'
             f'<td>{_badge(f["severity"])}</td>'
             f'<td>{hl_cell}</td><td>{os_cell}</td>'
             f'<td>{outcome}</td></tr>'
@@ -543,6 +550,9 @@ def _render_html(traces: list[dict], run: RunResult) -> str:
   .attack-prompt {{ color:var(--muted); font-size:12px; font-style:italic;
     overflow-wrap:anywhere; }}
   .attack-prompt::before {{ content:"↳ prompt: "; font-style:normal; opacity:.7; }}
+  .apetag {{ display:inline-block; margin-left:7px; font-size:10px; font-weight:600;
+    color:var(--muted); background:rgba(120,130,145,.12); padding:1px 6px;
+    border-radius:5px; font-variant-numeric:tabular-nums; letter-spacing:.02em; }}
   .findings .state {{ font-weight:700; font-size:11px; }}
   .findings tr.open .state {{ color:#e0733a; }}
   .findings .ev {{ color:var(--muted); }}

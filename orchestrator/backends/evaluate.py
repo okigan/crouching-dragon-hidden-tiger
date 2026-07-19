@@ -65,4 +65,6 @@ def evaluate(
         hl_signals=tuple(hl_signals),
         openshell_observed=observed is not None,
         egress_host=case.egress_host,
+        ape_technique=case.ape_technique,
+        ape_objective=case.ape_objective,
     )
