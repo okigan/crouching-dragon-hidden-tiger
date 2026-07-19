@@ -19,7 +19,10 @@ serve:
 
 # --- the Docker stack (real OpenShell gateway + our code) --------------------
 # Prereq: copy .env.example to .env and fill in the real backends.
-stack-up:            ## start the daemons: OpenShell gateway + web UI (:8090)
+stack-init:          ## generate the gateway JWT keys once (auto-removed container)
+	docker compose run --rm openshell-jwt-init
+
+stack-up: stack-init ## start the daemons: OpenShell gateway + web UI (:8090)
 	docker compose up -d openshell-gateway web
 
 stack-build:         ## rebuild our image after code changes (does NOT recreate)

@@ -14,13 +14,16 @@
 name: cdht
 
 services:
-  # One-shot: generate the sandbox-JWT signing keys the gateway needs.
-  # NOTE: the state dir is a HOST bind mount (not a named volume) so the gateway
-  # can share per-sandbox JWT token files with the sibling sandbox containers it
-  # spawns via the Docker socket — a named volume breaks that sharing.
+  # One-shot: generate the sandbox-JWT signing keys the gateway needs. It writes
+  # to the HOST bind mount /var/lib/openshell (shared with the gateway and the
+  # sibling sandboxes it spawns; a named volume would break that sharing) and is
+  # idempotent ("PKI files already exist, skipping"). It is behind the "init"
+  # profile so `docker compose up` never starts it — `make stack-up` runs it via
+  # `docker compose run --rm` (which auto-removes the container), so it leaves no
+  # lingering "exited" container in the list.
   openshell-jwt-init:
     image: ghcr.io/nvidia/openshell/gateway:latest
-    container_name: cdht-openshell-jwt-init
+    profiles: ["init"]
     user: "0"
     entrypoint:
       - /usr/local/bin/openshell-gateway
@@ -39,14 +42,14 @@ services:
 
   # The real OpenShell gateway (prebuilt image). Spawns sandbox containers via
   # the host Docker socket; enforces the loaded policy.yaml for real.
+  # Prereq: the JWT signing keys under /var/lib/openshell (generated once by the
+  # openshell-jwt-init job — `make stack-up` runs it first; the keys then persist
+  # on the host, so subsequent starts need no init container).
   openshell-gateway:
     image: ghcr.io/nvidia/openshell/gateway:latest
     container_name: cdht-openshell-gateway
     command: []              # clear default CMD so gateway.toml bind wins
     user: "0"
-    depends_on:
-      openshell-jwt-init:
-        condition: service_completed_successfully
     ports:
       - "127.0.0.1:8080:8080"
       - "127.0.0.1:8081:8081"
