@@ -242,9 +242,9 @@ def _summary(run: Path) -> dict:
 
 
 def _defense_view(run: Path) -> dict:
-    """From a run's traces.json: the '% defended per round' stacked chart plus
-    the final-round counts of attacks caught by HiddenLayer vs OpenShell — the
-    same defended framing the detailed report uses, so card and report agree."""
+    """From a run's traces.json: a convergence sparkline (share of attacks
+    defended, climbing per round toward 100%) plus the final-round counts of
+    attacks caught by HiddenLayer vs OpenShell."""
     tf = run / "traces.json"
     if not tf.exists():
         return {}
@@ -252,21 +252,13 @@ def _defense_view(run: Path) -> dict:
         traces = json.loads(tf.read_text())
     except ValueError:
         return {}
-    cols = []
+    fracs = []
     for t in traces:
         fs = t.get("findings", [])
         n = len(fs) or 1
-        hl = sum(1 for f in fs if f.get("hl_detected"))
-        os_ = sum(1 for f in fs if f.get("openshell_blocked") and not f.get("hl_detected"))
         landed = sum(1 for f in fs if not f.get("resolved"))
-        cols.append(
-            f'<span class="mcol">'
-            f'<i class="ms landed" style="height:{landed / n * 100:.0f}%"></i>'
-            f'<i class="ms os" style="height:{os_ / n * 100:.0f}%"></i>'
-            f'<i class="ms hl" style="height:{hl / n * 100:.0f}%"></i></span>'
-        )
-    chart = ('<div class="mchart" title="% defended per round — green HiddenLayer '
-             f'+ blue OpenShell, red landed">{"".join(cols)}</div>')
+        fracs.append((n - landed) / n)
+    chart = _sparkline(fracs)
     # final-round layer attribution (exclude REG- regression duplicates)
     final = [f for f in (traces[-1].get("findings", []) if traces else [])
              if not f.get("id", "").startswith("REG-")]
@@ -274,6 +266,34 @@ def _defense_view(run: Path) -> dict:
     caught_os = sum(1 for f in final
                     if f.get("openshell_blocked") and not f.get("hl_detected"))
     return {"chart": chart, "caught_hl": caught_hl, "caught_os": caught_os}
+
+
+def _sparkline(fracs: list[float]) -> str:
+    """An SVG area+line sparkline of the defended share (0..1) per round. Ends on
+    a marker at the final value; a dashed rule marks the 100%-defended target."""
+    if not fracs:
+        return ""
+    W, H, pad = 148.0, 44.0, 4.0
+    pts = fracs if len(fracs) > 1 else fracs * 2
+    span = len(pts) - 1
+    coords = [
+        (pad + (W - 2 * pad) * (i / span), pad + (H - 2 * pad) * (1 - fr))
+        for i, fr in enumerate(pts)
+    ]
+    line = " ".join(f"{x:.1f},{y:.1f}" for x, y in coords)
+    area = f"{coords[0][0]:.1f},{H - pad:.1f} {line} {coords[-1][0]:.1f},{H - pad:.1f}"
+    lx, ly = coords[-1]
+    return (
+        f'<svg class="spark" viewBox="0 0 {W:.0f} {H:.0f}" '
+        f'width="{W:.0f}" height="{H:.0f}" role="img" '
+        f'aria-label="share of attacks defended per round">'
+        f'<line class="spk-goal" x1="{pad:.0f}" y1="{pad:.0f}" '
+        f'x2="{W - pad:.0f}" y2="{pad:.0f}"/>'
+        f'<polygon class="spk-area" points="{area}"/>'
+        f'<polyline class="spk-line" points="{line}"/>'
+        f'<circle class="spk-dot" cx="{lx:.1f}" cy="{ly:.1f}" r="2.6"/>'
+        f'</svg>'
+    )
 
 
 def _card(info: dict) -> str:
@@ -284,25 +304,30 @@ def _card(info: dict) -> str:
 
     # "attacks defended" (higher is better) — same framing as the report. Invert
     # the recorded attack-success-rate "60% → 0% (delta +60%)" into "40% → 100%".
-    defended, delta = "", ""
+    hero, trend = "", ""
     m = re.match(r"(\d+)%\s*→\s*(\d+)%\s*\(delta\s*([^)]+)\)", info.get("success", ""))
     if m:
         a, b = 100 - int(m.group(1)), 100 - int(m.group(2))
-        defended = f"{a}% → {b}%"
-        delta = f' <span class="delta">{html.escape(m.group(3).strip())}</span>'
+        hero = f"{b}%"
+        trend = (f'<span class="mtrend">from {a}% '
+                 f'<b class="delta">{html.escape(m.group(3).strip())}</b></span>')
 
-    stats = []
-    if defended:
-        stats.append(f'<div class="stat"><b>{defended}</b>'
-                     f'<em>attacks defended{delta}</em></div>')
+    meta = []
     if info.get("rounds"):
-        stats.append(f'<div class="stat"><b>{html.escape(info["rounds"])}</b>'
-                     f'<em>rounds</em></div>')
+        meta.append(f'{html.escape(info["rounds"])} rounds')
     if "caught_hl" in info:
-        stats.append(f'<div class="stat"><b>{info.get("caught_hl", 0)} / '
-                     f'{info.get("caught_os", 0)}</b>'
-                     f'<em>caught by HiddenLayer / OpenShell</em></div>')
-    stats_html = f'<div class="stats">{"".join(stats)}</div>'
+        meta.append(f'{info.get("caught_hl", 0)} HL &middot; '
+                    f'{info.get("caught_os", 0)} OS caught')
+    meta_html = (f'<div class="metric-meta">{"".join(f"<span>{x}</span>" for x in meta)}</div>'
+                 if meta else "")
+
+    metrics_html = (
+        f'<div class="metrics">'
+        f'<span class="mlabel">attacks defended</span>'
+        f'<div class="metric-hero"><span class="mnum">{hero or "—"}</span>{trend}</div>'
+        f'{meta_html}'
+        f'</div>'
+    )
 
     sub_parts = []
     if info.get("when"):
@@ -315,7 +340,7 @@ def _card(info: dict) -> str:
     log_link = (f'<a href="/log/{n}">log</a>' if info.get("has_log") else "")
     chart = info.get("chart", "")
     chart_block = (f'<div class="run-chart">{chart}'
-                   f'<span class="chart-cap">defended / round</span></div>' if chart else "")
+                   f'<span class="chart-cap">defense per round</span></div>' if chart else "")
     return (
         f'<div class="run">'
         f'<div class="run-id">'
@@ -324,7 +349,7 @@ def _card(info: dict) -> str:
         f'{subline}'
         f'<div class="links"><a href="/runs/{n}/report.html">open report</a>{log_link}</div>'
         f'</div>'
-        f'{stats_html}'
+        f'{metrics_html}'
         f'{chart_block}'
         f'</div>'
     )
@@ -420,26 +445,34 @@ _PAGE = """<!doctype html><html lang="en"><head><meta charset="utf-8">
   .wrap { max-width:1060px; margin:0 auto; padding:40px 28px 80px;
     position:relative; z-index:1; }
   h1 { font-size:24px; margin:0 0 4px; } .sub { color:var(--muted); font-size:13px; margin-bottom:28px; }
-  .run { display:grid; grid-template-columns:minmax(260px,1fr) auto auto;
-    align-items:center; column-gap:40px; row-gap:18px; color:inherit;
-    background:var(--card); border:1px solid var(--line); border-radius:12px;
-    padding:20px 24px; margin-bottom:12px;
-    transition:border-color .12s, box-shadow .12s; }
-  .run:hover { border-color:var(--accent); box-shadow:0 2px 10px rgba(15,23,42,.06); }
+  .run { display:grid; grid-template-columns:minmax(240px,1.3fr) minmax(150px,1fr) auto;
+    align-items:center; column-gap:36px; row-gap:18px; color:inherit;
+    background:var(--card); border:1px solid var(--line); border-radius:14px;
+    padding:22px 26px; margin-bottom:12px;
+    transition:border-color .14s, box-shadow .14s, transform .14s; }
+  .run:hover { border-color:var(--accent);
+    box-shadow:0 6px 22px rgba(15,23,42,.08); transform:translateY(-1px); }
   .run-id { min-width:0; }
   .run-head { display:flex; align-items:center; gap:12px; }
   .run-title { text-decoration:none; color:inherit; font-weight:600; font-size:15px;
     font-variant-numeric:tabular-nums; letter-spacing:-.01em; }
   .run-title:hover { color:var(--accent); }
   .run-sub { color:var(--muted); font-size:12.5px; margin-top:7px;
-    overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  .stats { display:flex; gap:34px; }
-  .stat { display:flex; flex-direction:column; gap:4px; }
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+    font-variant-numeric:tabular-nums; }
+  /* metric block */
+  .metrics { display:flex; flex-direction:column; gap:5px; min-width:0; }
+  .mlabel { font-size:10.5px; font-weight:600; color:var(--muted);
+    text-transform:uppercase; letter-spacing:.06em; }
+  .metric-hero { display:flex; align-items:baseline; gap:10px; flex-wrap:wrap; }
+  .mnum { font-size:30px; font-weight:680; line-height:1;
+    font-variant-numeric:tabular-nums; letter-spacing:-.02em; }
+  .mtrend { font-size:12px; color:var(--muted); font-variant-numeric:tabular-nums; }
+  .delta { color:#0f9d74; font-weight:700; }
+  .metric-meta { display:flex; flex-wrap:wrap; gap:6px 0; margin-top:2px;
+    font-size:11.5px; color:var(--muted); font-variant-numeric:tabular-nums; }
+  .metric-meta span:not(:last-child)::after { content:"·"; margin:0 8px; opacity:.6; }
   @media (max-width:820px) { .run { grid-template-columns:1fr; column-gap:0; } }
-  .stat b { font-size:16px; font-weight:600; font-variant-numeric:tabular-nums;
-    letter-spacing:-.01em; }
-  .stat em { font-style:normal; color:var(--muted); font-size:11px; }
-  .stat .delta { color:#0f9d74; font-weight:600; }
   .links { margin-top:16px; font-size:12px; display:flex; gap:16px; }
   .links a, .sub-link { color:var(--accent); text-decoration:none; font-weight:500; }
   .links a:hover { text-decoration:underline; }
@@ -447,15 +480,16 @@ _PAGE = """<!doctype html><html lang="en"><head><meta charset="utf-8">
     text-transform:uppercase; letter-spacing:.04em; border:1px solid transparent; }
   .badge.ok { background:rgba(15,157,116,.12); color:#0f9d74; border-color:rgba(15,157,116,.25); }
   .badge.warn { background:rgba(224,138,50,.12); color:#c8791d; border-color:rgba(224,138,50,.25); }
-  .run-chart { display:flex; flex-direction:column; align-items:center; gap:8px; flex:none; }
+  /* convergence sparkline */
+  .run-chart { display:flex; flex-direction:column; align-items:center; gap:7px; flex:none; }
   .chart-cap { font-size:10px; color:var(--muted); white-space:nowrap;
-    letter-spacing:.02em; }
-  .mchart { display:flex; align-items:flex-end; gap:4px; height:46px; }
-  .mcol { width:9px; height:100%; display:flex; flex-direction:column;
-    justify-content:flex-end; border-radius:2px; overflow:hidden;
-    background:rgba(120,130,145,.10); }
-  .ms { width:100%; display:block; }
-  .ms.hl { background:#0f9d74; } .ms.os { background:#3b5bde; } .ms.landed { background:#e0576b; }
+    letter-spacing:.03em; text-transform:uppercase; }
+  .spark { display:block; overflow:visible; }
+  .spk-area { fill:var(--accent); opacity:.10; stroke:none; }
+  .spk-line { fill:none; stroke:var(--accent); stroke-width:1.8;
+    stroke-linejoin:round; stroke-linecap:round; }
+  .spk-dot { fill:var(--card); stroke:var(--accent); stroke-width:1.8; }
+  .spk-goal { stroke:var(--line); stroke-width:1; stroke-dasharray:2 3; }
   .empty { color:var(--muted); } code { background:rgba(128,128,128,.15); padding:1px 5px; border-radius:5px; }
   .runbar { display:flex; align-items:center; gap:16px; flex-wrap:wrap; background:var(--card);
     border:1px solid var(--line); border-radius:14px; padding:16px 20px; margin-bottom:20px; }
