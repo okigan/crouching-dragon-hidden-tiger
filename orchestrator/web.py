@@ -459,31 +459,44 @@ def _llm_control() -> str:
             f'<select name="model">{"".join(opts)}</select></div>')
 
 
+def _chip(name: str, value: str, label: str) -> str:
+    return (f'<label class="chip"><input type="checkbox" name="{name}" '
+            f'value="{html.escape(value)}" checked>{html.escape(label)}</label>')
+
+
 def _ape_filter() -> str:
-    """Collapsible APE-coverage selector: tactic (how) + category (what)
-    checkboxes, all checked by default, that narrow the generation pool."""
+    """Always-visible APE-coverage selector: tactic (how) + category (what)
+    chip toggles, all checked by default, that narrow the generation pool."""
     from . import ape
     from .generator import CATEGORIES
-    tac = "".join(
-        f'<label class="cbx"><input type="checkbox" name="tactics" '
-        f'value="{html.escape(t["id"])}" checked>'
-        f'<span>{html.escape(t["id"])} · {html.escape(t["name"])}</span></label>'
-        for t in ape.tactics()
-    )
-    cat = "".join(
-        f'<label class="cbx"><input type="checkbox" name="categories" '
-        f'value="{html.escape(c)}" checked>'
-        f'<span>{html.escape(c.replace("_", " "))}</span></label>'
-        for c in CATEGORIES
-    )
+    tac = "".join(_chip("tactics", t["id"], f'{t["id"]} · {t["name"]}')
+                  for t in ape.tactics())
+    cat = "".join(_chip("categories", c, c.replace("_", " "))
+                  for c in CATEGORIES)
+
+    def group(field: str, label: str, chips: str) -> str:
+        return (
+            '<div class="apegroup">'
+            f'<div class="gl"><span class="clab">{label}</span>'
+            f'<span class="gtog"><a data-all="{field}">all</a>'
+            f'<a data-none="{field}">none</a></span></div>'
+            f'<div class="chips">{chips}</div></div>'
+        )
+
     return (
-        '<details class="apefilter"><summary>🎯 APE coverage — '
-        '<b>all</b> tactics &amp; categories <span class="hint">(narrow the '
-        'attack pool)</span></summary><div class="apecols">'
-        f'<div class="apecol"><span class="clab">tactics · the “how”</span>'
-        f'<div class="cbxs">{tac}</div></div>'
-        f'<div class="apecol"><span class="clab">categories · the “what”</span>'
-        f'<div class="cbxs">{cat}</div></div></div></details>'
+        '<div class="apefilter">'
+        '<div class="apehead"><b>🎯 APE coverage</b>'
+        '<span class="hint">all selected — uncheck to narrow which attacks '
+        'this run generates</span></div>'
+        '<div class="apecols">'
+        f'{group("tactics", "tactics · the “how”", tac)}'
+        f'{group("categories", "categories · the “what”", cat)}'
+        '</div>'
+        "<script>document.querySelectorAll('.gtog a').forEach(function(a){"
+        "a.addEventListener('click',function(){var n=a.dataset.all||a.dataset.none,"
+        "on=!!a.dataset.all;document.querySelectorAll('input[name=\"'+n+'\"]')"
+        ".forEach(function(c){c.checked=on;});});});</script>"
+        '</div>'
     )
 
 
@@ -584,18 +597,30 @@ _PAGE = """<!doctype html><html lang="en"><head><meta charset="utf-8">
   .runbar input.num { width:60px; text-align:center; }
   .ctrl.grow select { flex:1; width:100%; }
   .static { color:var(--fg); font-size:13px; }
-  .apefilter { flex-basis:100%; border-top:1px solid var(--line); padding-top:12px;
-    margin-top:2px; font-size:13px; }
-  .apefilter summary { cursor:pointer; color:var(--fg); font-weight:600;
-    list-style:none; user-select:none; }
-  .apefilter summary::-webkit-details-marker { display:none; }
-  .apefilter summary .hint { color:var(--muted); font-weight:400; font-size:12px; }
-  .apecols { display:flex; gap:36px; flex-wrap:wrap; margin-top:14px; }
-  .apecol { display:flex; flex-direction:column; gap:8px; min-width:240px; }
-  .cbxs { display:flex; flex-direction:column; gap:6px; }
-  .cbx { display:flex; align-items:center; gap:8px; font-size:12.5px;
-    color:var(--fg); cursor:pointer; }
-  .cbx input { width:15px; height:15px; accent-color:var(--accent); margin:0; }
+  .apefilter { flex-basis:100%; border-top:1px solid var(--line); padding-top:16px;
+    margin-top:4px; }
+  .apehead { display:flex; align-items:baseline; gap:10px; flex-wrap:wrap; }
+  .apehead b { font-size:14px; }
+  .apehead .hint { color:var(--muted); font-size:12px; }
+  .apecols { display:grid; grid-template-columns:1fr 1fr; gap:26px 40px; margin-top:16px; }
+  @media (max-width:760px) { .apecols { grid-template-columns:1fr; } }
+  .apegroup { min-width:0; }
+  .gl { display:flex; align-items:center; gap:10px; margin-bottom:11px; }
+  .gl .clab { font-size:11px; text-transform:uppercase; letter-spacing:.05em; }
+  .gtog { margin-left:auto; display:flex; gap:8px; font-size:11px; }
+  .gtog a { color:var(--accent); cursor:pointer; text-decoration:none; }
+  .gtog a:hover { text-decoration:underline; }
+  .chips { display:flex; flex-wrap:wrap; gap:8px; }
+  .chip { display:inline-flex; align-items:center; font-size:12.5px; line-height:1;
+    padding:7px 13px; border:1px solid var(--line); border-radius:20px;
+    background:var(--bg); color:var(--muted); cursor:pointer; user-select:none;
+    white-space:nowrap; transition:border-color .12s, background .12s, color .12s; }
+  .chip input { position:absolute; opacity:0; width:0; height:0; }
+  .chip:hover { border-color:var(--accent); }
+  .chip:has(input:checked) { background:rgba(52,87,213,.12);
+    border-color:rgba(52,87,213,.5); color:var(--accent); font-weight:600; }
+  .chip:has(input:checked)::before { content:"✓"; margin-right:6px; font-size:11px; }
+  .chip:has(input:focus-visible) { outline:2px solid var(--accent); outline-offset:1px; }
   .status { border-radius:10px; padding:14px 18px; margin-bottom:20px; font-size:13px; line-height:1.55; }
   .run-active { background:rgba(52,87,213,.10); border:1px solid rgba(52,87,213,.25); color:var(--fg); }
   .st-row { display:flex; align-items:center; gap:9px; font-size:13px; }
