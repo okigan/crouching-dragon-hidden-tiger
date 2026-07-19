@@ -64,10 +64,12 @@ def _run(args: argparse.Namespace) -> int:
         reporter.set_generation_log(gen_log)
         caught = sum(1 for a in gen_log if a["outcome"] == "caught")
         errors = sum(1 for a in gen_log if a["outcome"] == "error")
+        ids = [c.id for c in new]
+        shown = ", ".join(ids[:12]) + (f", … (+{len(ids) - 12} more)"
+                                       if len(ids) > 12 else "")
         print(f"probed {scope} ({len(gen_log)} attempts) → {len(new)} evaded "
               f"to OpenShell, {caught} caught by HiddenLayer, "
-              f"{errors} endpoint error(s): "
-              f"{', '.join(c.id for c in new) or 'none'}")
+              f"{errors} endpoint error(s): {shown or 'none'}")
         if errors and not new:
             err = getattr(gen, "last_error", "") or "no model output"
             print(f"⚠ generation produced nothing — the LLM endpoint failed: {err}. "
