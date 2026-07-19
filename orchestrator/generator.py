@@ -86,14 +86,33 @@ _CATEGORY_SEVERITY: dict[str, Severity] = {
 }
 
 
-def taxonomy_specs() -> list[GenSpec]:
-    """The full red-team surface: every APE technique × every objective in the
-    vendored taxonomy, each tagged with its local category + the OpenShell
-    control that remediates it (empty for content_only)."""
+# The local attack categories, in report order — the axis that maps to what
+# OpenShell can (or can't, for content_only) defend.
+CATEGORIES: list[str] = [
+    "data_exfiltration", "pii_exfiltration", "tool_abuse",
+    "code_injection", "prompt_injection", "content_only",
+]
+
+
+def taxonomy_specs(
+    tactics: set[str] | None = None,
+    categories: set[str] | None = None,
+) -> list[GenSpec]:
+    """The red-team surface: every APE technique × every objective in the vendored
+    taxonomy, each tagged with its local category + the OpenShell control that
+    remediates it (empty for content_only).
+
+    Optional filters narrow the pool before sampling: `tactics` keeps only
+    techniques in those tactic IDs (e.g. {'HLT01','HLT03'}); `categories` keeps
+    only objectives that map to those local categories. Empty/None = no filter."""
     specs: list[GenSpec] = []
     for tid in ape.technique_ids():
+        if tactics and ape.technique_tactic(tid) not in tactics:
+            continue
         for oid in ape.objective_ids():
             cat = OBJECTIVE_CATEGORY.get(oid, "content_only")
+            if categories and cat not in categories:
+                continue
             oname = ape.objective_name(oid) or oid
             specs.append(GenSpec(
                 technique=tid,

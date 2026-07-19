@@ -125,7 +125,8 @@ def _host_runs_dir(client, me_id: str) -> str | None:
     return None
 
 
-def _launch(name: str, generate: int, model: str = "") -> None:
+def _launch(name: str, generate: int, model: str = "",
+            tactics: str = "", categories: str = "") -> None:
     """Run one analysis as a *visible sibling container* (cdht-<name>).
 
     The container appears in `docker ps` while the loop runs, writes its report
@@ -151,11 +152,16 @@ def _launch(name: str, generate: int, model: str = "") -> None:
             if prov and prov.get("base_url"):
                 env["NEMOTRON_BASE_URL"] = prov["base_url"]
                 env["NEMOTRON_KEY"] = prov["key"]
+        command = ["run", "--generate", str(generate),
+                   "--out", f"/app/runs/{name}",
+                   "--save-policy", f"/app/runs/{name}/hardened.yaml"]
+        if tactics:
+            command += ["--tactics", tactics]
+        if categories:
+            command += ["--categories", categories]
         container = client.containers.run(
             ORCH_IMAGE,
-            command=["run", "--generate", str(generate),
-                     "--out", f"/app/runs/{name}",
-                     "--save-policy", f"/app/runs/{name}/hardened.yaml"],
+            command=command,
             name=f"cdht-{name}",
             detach=True,
             environment=env,
@@ -378,13 +384,27 @@ def _card(info: dict) -> str:
 
 
 @app.post("/run")
-def run(generate: int = Form(3), model: str = Form("")):
-    """Launch one analysis run as a visible sibling container (real backends)."""
+def run(generate: int = Form(3), model: str = Form(""),
+        tactics: list[str] = Form(default=[]),
+        categories: list[str] = Form(default=[])):
+    """Launch one analysis run as a visible sibling container (real backends).
+
+    `tactics`/`categories` are the checked APE-coverage boxes; a filter is passed
+    to the run only when it's a strict subset (all-checked = full taxonomy, no
+    filter), and an empty selection is treated as 'all' rather than 'none'."""
+    from . import ape
+    from .generator import CATEGORIES
+    all_tac = {t["id"] for t in ape.tactics()}
+    sel_tac = {t for t in tactics if t in all_tac}
+    sel_cat = {c for c in categories if c in CATEGORIES}
+    tac_arg = ",".join(sorted(sel_tac)) if 0 < len(sel_tac) < len(all_tac) else ""
+    cat_arg = ",".join(sorted(sel_cat)) if 0 < len(sel_cat) < len(CATEGORIES) else ""
     if not _job["active"]:
         name = "run-" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
         _job.update(active=True, name=name, container=None, error=None)
         threading.Thread(
-            target=_launch, args=(name, generate, model), daemon=True
+            target=_launch, args=(name, generate, model, tac_arg, cat_arg),
+            daemon=True,
         ).start()
     return RedirectResponse("/", status_code=303)
 
@@ -414,6 +434,7 @@ def index() -> str:
     return (_PAGE.replace("{{cards}}", cards)
             .replace("{{count}}", str(len(runs)))
             .replace("{{status}}", status)
+            .replace("{{apefilter}}", _ape_filter())
             .replace("{{llm}}", _llm_control()))
 
 
@@ -436,6 +457,34 @@ def _llm_control() -> str:
     return ('<div class="ctrl grow"><span class="clab" title="LLM used to generate '
             'attacks and reason about fixes">🧠 model</span>'
             f'<select name="model">{"".join(opts)}</select></div>')
+
+
+def _ape_filter() -> str:
+    """Collapsible APE-coverage selector: tactic (how) + category (what)
+    checkboxes, all checked by default, that narrow the generation pool."""
+    from . import ape
+    from .generator import CATEGORIES
+    tac = "".join(
+        f'<label class="cbx"><input type="checkbox" name="tactics" '
+        f'value="{html.escape(t["id"])}" checked>'
+        f'<span>{html.escape(t["id"])} · {html.escape(t["name"])}</span></label>'
+        for t in ape.tactics()
+    )
+    cat = "".join(
+        f'<label class="cbx"><input type="checkbox" name="categories" '
+        f'value="{html.escape(c)}" checked>'
+        f'<span>{html.escape(c.replace("_", " "))}</span></label>'
+        for c in CATEGORIES
+    )
+    return (
+        '<details class="apefilter"><summary>🎯 APE coverage — '
+        '<b>all</b> tactics &amp; categories <span class="hint">(narrow the '
+        'attack pool)</span></summary><div class="apecols">'
+        f'<div class="apecol"><span class="clab">tactics · the “how”</span>'
+        f'<div class="cbxs">{tac}</div></div>'
+        f'<div class="apecol"><span class="clab">categories · the “what”</span>'
+        f'<div class="cbxs">{cat}</div></div></div></details>'
+    )
 
 
 @app.get("/log/{name}", response_class=PlainTextResponse)
@@ -535,6 +584,18 @@ _PAGE = """<!doctype html><html lang="en"><head><meta charset="utf-8">
   .runbar input.num { width:60px; text-align:center; }
   .ctrl.grow select { flex:1; width:100%; }
   .static { color:var(--fg); font-size:13px; }
+  .apefilter { flex-basis:100%; border-top:1px solid var(--line); padding-top:12px;
+    margin-top:2px; font-size:13px; }
+  .apefilter summary { cursor:pointer; color:var(--fg); font-weight:600;
+    list-style:none; user-select:none; }
+  .apefilter summary::-webkit-details-marker { display:none; }
+  .apefilter summary .hint { color:var(--muted); font-weight:400; font-size:12px; }
+  .apecols { display:flex; gap:36px; flex-wrap:wrap; margin-top:14px; }
+  .apecol { display:flex; flex-direction:column; gap:8px; min-width:240px; }
+  .cbxs { display:flex; flex-direction:column; gap:6px; }
+  .cbx { display:flex; align-items:center; gap:8px; font-size:12.5px;
+    color:var(--fg); cursor:pointer; }
+  .cbx input { width:15px; height:15px; accent-color:var(--accent); margin:0; }
   .status { border-radius:10px; padding:14px 18px; margin-bottom:20px; font-size:13px; line-height:1.55; }
   .run-active { background:rgba(52,87,213,.10); border:1px solid rgba(52,87,213,.25); color:var(--fg); }
   .st-row { display:flex; align-items:center; gap:9px; font-size:13px; }
@@ -557,6 +618,7 @@ _PAGE = """<!doctype html><html lang="en"><head><meta charset="utf-8">
       <span class="clab" title="How many new attack prompts the LLM crafts and screens this run (0 = corpus only)">new attacks</span>
     </div>
     {{llm}}
+    {{apefilter}}
   </form>
   {{status}}
   {{cards}}

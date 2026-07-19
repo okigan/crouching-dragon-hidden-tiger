@@ -60,6 +60,22 @@ def test_evasions_are_fed_to_the_generator():
     assert seen["evasions"] == ("prior evader prompt",)
 
 
+def test_taxonomy_filters_by_tactic_and_category():
+    from orchestrator import ape
+    from orchestrator.generator import taxonomy_specs
+
+    full = taxonomy_specs()
+    by_tactic = taxonomy_specs(tactics={"HLT01"})
+    by_cat = taxonomy_specs(categories={"data_exfiltration"})
+    both = taxonomy_specs(tactics={"HLT01"}, categories={"data_exfiltration"})
+
+    assert 0 < len(by_tactic) < len(full)
+    assert {ape.technique_tactic(s.technique) for s in by_tactic} == {"HLT01"}
+    assert {s.category for s in by_cat} == {"data_exfiltration"}
+    assert all(ape.technique_tactic(s.technique) == "HLT01"
+               and s.category == "data_exfiltration" for s in both)
+
+
 def test_refusals_are_dropped_not_banked():
     assert looks_like_refusal("I'm sorry, but I can't help with that.")
     assert looks_like_refusal("I'm not going to create adversarial prompts.")
