@@ -15,6 +15,7 @@ import html
 import json
 import os
 import re
+import socket
 import threading
 from pathlib import Path
 
@@ -23,44 +24,79 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 RUNS_DIR = Path(os.environ.get("RUNS_DIR", "runs"))
+# The image a run executes in (built by docker-compose as `cdht-orchestrator`).
+ORCH_IMAGE = os.environ.get("ORCH_IMAGE", "cdht-orchestrator")
+# Backend config forwarded from this container's env into each run container.
+_ENV_PREFIXES = ("LLM", "ASSESSOR", "SANDBOX", "OPENSHELL", "HIDDENLAYER", "NEMOTRON")
 
 app = FastAPI(title="Crouching Dragon Hidden Tiger")
 RUNS_DIR.mkdir(exist_ok=True)
 app.mount("/runs", StaticFiles(directory=str(RUNS_DIR)), name="runs")
 
-# Single in-flight run at a time (this is a local tool, not a job queue).
-_job: dict = {"active": False, "name": None, "error": None}
+# Single in-flight run at a time (this is a local demo tool, not a job queue).
+_job: dict = {"active": False, "name": None, "container": None, "error": None}
 
 
-def _run_loop(name: str, generate: int) -> None:
-    """Run one analysis loop in a background thread, writing to runs/<name>.
+def _host_runs_dir(client, me_id: str) -> str | None:
+    """Host path backing our /app/runs bind mount. A run executes as a *sibling*
+    container launched through the host Docker daemon, so it must mount the same
+    host directory — /app/runs is meaningless to the daemon."""
+    me = client.containers.get(me_id)
+    for m in me.attrs.get("Mounts", []):
+        if m.get("Destination") == "/app/runs":
+            return m.get("Source")
+    return None
 
-    Always drives the real backends configured in .env (SANDBOX=openshell);
-    the mock sandbox exists only for the test suite, never the web UI.
+
+def _launch(name: str, generate: int) -> None:
+    """Run one analysis as a *visible sibling container* (cdht-<name>).
+
+    The container appears in `docker ps` while the loop runs, writes its report
+    into the shared runs/ volume, and removes itself when done — so a demo can
+    be driven entirely from the browser. Always uses the real backends from the
+    environment (SANDBOX=openshell); mocks are test-only, never the web UI.
     """
+    container = None
     try:
-        from .config import Settings
-        from .generator import generate_attacks
-        from .loop import LoopConfig, SecurityOrchestrator
-        from .policy_store import PolicyStore
-        from .reporter import Reporter
+        import docker
 
-        settings = Settings.from_env(dict(os.environ))
-        store = PolicyStore.load("policies/permissive.yaml")
-        reporter = Reporter(run_dir=RUNS_DIR / name)
-        assessor = settings.build_assessor()
-        if generate:
-            new = generate_attacks(settings.build_generator(), assessor.detect, generate)
-            assessor.add_tests(new)
-        orch = SecurityOrchestrator(
-            settings.build_sandbox(), assessor, settings.build_llm(),
-            store, reporter, LoopConfig(),
+        client = docker.from_env()
+        host_runs = _host_runs_dir(client, socket.gethostname())
+        if not host_runs:
+            raise RuntimeError(
+                "cannot resolve the host path for /app/runs — launch the web UI "
+                "through the docker stack (make stack-up), not a bare process")
+        env = {k: v for k, v in os.environ.items()
+               if any(k.startswith(p) for p in _ENV_PREFIXES)}
+        container = client.containers.run(
+            ORCH_IMAGE,
+            command=["run", "--generate", str(generate),
+                     "--out", f"/app/runs/{name}",
+                     "--save-policy", f"/app/runs/{name}/hardened.yaml"],
+            name=f"cdht-{name}",
+            detach=True,
+            environment=env,
+            volumes={host_runs: {"bind": "/app/runs", "mode": "rw"}},
+            extra_hosts={"host.docker.internal": "host-gateway"},
         )
-        reporter.summarize(orch.run())
+        _job["container"] = container.name
+        status = container.wait()  # blocks until the run finishes
+        code = status.get("StatusCode", 0)
+        # A crash and a "did not converge" both exit 1, so the exit code alone
+        # can't tell success from failure — the report file is the real signal.
+        report_written = (RUNS_DIR / name / "report.html").exists()
+        if not report_written:
+            logs = container.logs(tail=30).decode("utf-8", "replace")
+            _job["error"] = f"run container exited {code} without a report\n{logs}"
     except Exception as exc:  # surface any failure in the UI
         _job["error"] = f"{type(exc).__name__}: {exc}"
     finally:
-        _job["active"] = False
+        if container is not None:
+            try:
+                container.remove(force=True)
+            except Exception:
+                pass
+        _job.update(active=False, container=None)
 
 
 def _run_dirs() -> list[Path]:
@@ -117,12 +153,12 @@ def _card(info: dict) -> str:
 
 @app.post("/run")
 def run(generate: int = Form(3)):
-    """Kick off one analysis loop in the background (real backends via .env)."""
+    """Launch one analysis run as a visible sibling container (real backends)."""
     if not _job["active"]:
         name = "run-" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
-        _job.update(active=True, name=name, error=None)
+        _job.update(active=True, name=name, container=None, error=None)
         threading.Thread(
-            target=_run_loop, args=(name, generate), daemon=True
+            target=_launch, args=(name, generate), daemon=True
         ).start()
     return RedirectResponse("/", status_code=303)
 
@@ -133,8 +169,10 @@ def index() -> str:
     cards = "".join(_card(_summary(r)) for r in runs) or \
         '<p class="empty">No runs yet — click <b>Run analysis</b> above.</p>'
     if _job["active"]:
-        status = (f'<div class="status run-active">⏳ Running <b>{html.escape(_job["name"] or "")}</b>'
-                  " — generating prompts, screening HiddenLayer, hardening OpenShell… "
+        cname = html.escape(_job.get("container") or "starting…")
+        status = (f'<div class="status run-active">⏳ Running in container '
+                  f'<code>{cname}</code> — generating prompts, screening HiddenLayer, '
+                  "hardening OpenShell. Watch it in Docker; it removes itself when done. "
                   '<a href="/">refresh</a></div>')
     elif _job.get("error"):
         status = f'<div class="status run-error">Last run failed: {html.escape(_job["error"])}</div>'

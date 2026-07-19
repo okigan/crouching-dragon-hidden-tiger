@@ -18,6 +18,7 @@ web = [
     "fastapi>=0.110",
     "uvicorn>=0.29",
     "python-multipart>=0.0.9",
+    "docker>=7",           # web UI launches each run as a sibling container
 ]
 
 # Installed by default under `uv run` / `uv sync` (no --extra needed).

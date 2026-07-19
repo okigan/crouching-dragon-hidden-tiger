@@ -89,6 +89,8 @@ services:
       - ./policies:/app/policies
 
   # Light web UI to browse run reports at http://localhost:8090 (a daemon).
+  # The "Run analysis" button launches each run as a visible sibling container
+  # (cdht-run-*) via the host Docker socket, so a demo is fully browser-driven.
   web:
     build: .
     image: cdht-orchestrator
@@ -103,4 +105,5 @@ services:
       - "host.docker.internal:host-gateway"
     volumes:
       - ./runs:/app/runs
+      - /var/run/docker.sock:/var/run/docker.sock   # launch run containers
     restart: unless-stopped
