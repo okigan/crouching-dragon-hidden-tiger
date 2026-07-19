@@ -99,6 +99,22 @@ def test_coverage_dedups_identical_payloads():
     assert len(cases) == 1
 
 
+def test_coverage_labels_endpoint_errors_not_refusals():
+    specs = taxonomy_specs(categories={"tool_abuse"})
+
+    class Erroring:  # mimics a generator whose endpoint 429s (empty + last_error)
+        last_error = "HTTP 429: rate limit exceeded"
+
+        def generate(self, spec, evasions=(), attempts=()):
+            return ""
+
+    log: list[dict] = []
+    cases = generate_coverage(Erroring(), lambda p: False, 2, specs, attempts_out=log)
+    assert cases == []
+    assert [a["outcome"] for a in log] == ["error", "error"]  # not "refused"
+    assert "429" in log[0]["payload"]
+
+
 def test_coverage_attempts_are_bounded_when_detected():
     specs = taxonomy_specs(categories={"tool_abuse"})
     # everything caught at the content layer -> K tries, 0 banked (all defended)

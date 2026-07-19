@@ -417,6 +417,7 @@ _GEN_OUTCOME = {
     "caught": ("caught by HiddenLayer (content layer)", "hl"),
     "refused": ("model refused", "muted"),
     "duplicate": ("duplicate of an earlier try", "muted"),
+    "error": ("endpoint error — no output", "err"),
 }
 
 
@@ -433,6 +434,11 @@ def _generation_coverage(generation: list[dict]) -> str:
         f'<span class="gcstat gc-{cls}">{tally.get(k, 0)} {html.escape(lbl)}</span>'
         for k, (lbl, cls) in _GEN_OUTCOME.items() if tally.get(k)
     )
+    err_note = ""
+    if tally.get("error"):
+        err_note = ('<div class="gcerr">⚠ Some tries never reached the model — the '
+                    'LLM endpoint returned an error (e.g. rate limit / quota). '
+                    'Switch the model in the run bar or check the endpoint.</div>')
     rows = []
     for a in generation:
         lbl, cls = _GEN_OUTCOME.get(a.get("outcome", ""),
@@ -454,7 +460,7 @@ def _generation_coverage(generation: list[dict]) -> str:
         'across the selected categories. Attempts <b>caught by HiddenLayer</b> or '
         'refused never reach the corpus below — this is the full coverage, including '
         f'what the content layer already stopped.</div>'
-        f'<div class="gcstats">{chips}</div>'
+        f'<div class="gcstats">{chips}</div>{err_note}'
         '<table class="findings"><thead><tr><th>id</th><th>category</th>'
         '<th>outcome</th><th>prompt</th></tr></thead>'
         f'<tbody>{"".join(rows)}</tbody></table></div>'
@@ -617,8 +623,12 @@ def _render_html(traces: list[dict], run: RunResult,
     background:rgba(120,130,145,.12); color:var(--muted); }}
   .gcstat.gc-ok {{ background:rgba(47,189,107,.15); color:#0f9d74; }}
   .gcstat.gc-hl {{ background:rgba(209,102,15,.15); color:#d1660f; }}
+  .gcstat.gc-err {{ background:rgba(213,48,74,.16); color:#e0576b; }}
+  .gcerr {{ font-size:12px; color:#e0576b; background:rgba(213,48,74,.10);
+    border-radius:8px; padding:8px 12px; margin-bottom:12px; }}
   .gco {{ font-size:11px; font-weight:600; }}
   .gco-ok {{ color:#0f9d74; }} .gco-hl {{ color:#d1660f; }} .gco-muted {{ color:var(--muted); }}
+  .gco-err {{ color:#e0576b; }}
   .apetag {{ display:inline-block; margin-left:7px; font-size:10px; font-weight:600;
     color:var(--muted); background:rgba(120,130,145,.12); padding:1px 6px;
     border-radius:5px; font-variant-numeric:tabular-nums; letter-spacing:.02em; }}
