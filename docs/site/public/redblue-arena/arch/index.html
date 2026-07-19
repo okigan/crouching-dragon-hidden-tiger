@@ -1,0 +1,70 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<meta name="description" content="Compose topology, co-evolution loop, Cloudflare stores, and risk model."><title>Red/Blue Arena — Architecture</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/redblue-arena/style.css"></head><body>
+<div class="topbar">
+  <a class="topbar-logo" href="/redblue-arena/"><span class="initials">RB</span><span class="slash">/</span><span>Red&#47;Blue Arena</span></a>
+  <div class="topbar-links"><a href="#topology">Topology</a><a href="#loop">The Loop</a><a href="#stores">Stores</a><a href="#risk">Risk Model</a><a href="#trackmap">Track Map</a><a href="https://github.com/okigan/crouching-dragon-hidden-tiger" style="margin-left:8px;color:var(--teal)">GitHub</a><a href="https://organizedai.vip" style="color:var(--muted)">organizedai.vip</a></div>
+</div><div class="body-wrap"><nav class="sidebar"><div class="sidebar-section"><div class="sidebar-heading">Sections</div><a class="nav-link active" href="#topology">Topology</a><a class="nav-link" href="#loop">The Loop</a><a class="nav-link" href="#stores">Stores</a><a class="nav-link" href="#risk">Risk Model</a><a class="nav-link" href="#trackmap">Track Map</a></div>
+  <hr class="sidebar-divider"><div class="sidebar-meta">
+  <a href="/redblue-arena/guide/">Guide &#8599;</a><a href="/redblue-arena/wiki/">Wiki &#8599;</a><a href="/redblue-arena/arch/">Arch &#8599;</a><a href="/redblue-arena/visual/">Visual &#8599;</a></div>
+  <hr class="sidebar-divider" style="margin-top:12px"><div class="sidebar-meta"><span>redblue-arena</span><span>architecture</span><span>5 sections</span></div></nav><main>
+<div class="hero" id="home"><div class="hero-eyebrow">ARCHITECTURE // RED&#47;BLUE ARENA</div><h1>System Design</h1>
+<p class="hero-sub">The compose topology, the co-evolution loop, the Cloudflare stores, and the risk model that keeps the judged boundary in the OpenShell policy.</p>
+<div class="pills"><div class="pill">2 Docker networks</div><div class="pill">3 CF stores</div><div class="pill">1 judged boundary</div></div></div>
+
+<div class="section" id="topology"><div class="section-comment">// TOPOLOGY</div><h1>Two networks, by design</h1>
+<p class="lead">Docker Compose gives reproducibility and clean isolation. The critical choice: <code>data-net</code> egress stays open so the OpenShell policy &mdash; not Docker &mdash; is the guard on the judged path.</p>
+<pre class="ascii">        &#8214;&#8213;&#8213;&#8213;&#8213;&#8213;&#8213; docker compose network &#8213;&#8213;&#8213;&#8213;&#8213;&#8213;&#8214;
+        &#8214;   <span class="hp">controller</span> &#8213;&#8213;&#8213;&#8213;&#8213;&#8213;&#8213; reasoning &#8213;&#8213;&#8213;&#8213;&#8213;&#8594; <span class="hb">CF Worker</span>  &#8594; <span class="hg">vLLM+Nemotron</span>
+        &#8214;      &#8595;          &#8595;                            (Brev, cloud)
+        &#8214;   <span class="hr">red-team</span>   <span class="hb">blue-team</span>                          &#8595; reasoning
+        &#8214;      &#8595; attack    &#8595; harden                    served to BOTH sides
+        &#8214;   &#8213;&#8213;&#8213;&#8213;&#8213;&#8213;&#8213;&#8213;&#8213;&#8213;&#8213;&#8213;&#8213;&#8213;&#8213;&#8213;&#8213;&#8213;&#8213;&#8213;&#8213;&#8213;&#8213;&#8213;&#8213;&#8213;
+        &#8214;   &#8214; <span class="ha">TARGET</span> (OpenShell sandbox) &#8214; &#8213; check I&#47;O &#8594; <span class="hr">HiddenLayer</span> (cloud)
+        &#8214;   &#8214;  agent + seeded secrets   &#8214;
+        &#8214;   &#8213;&#8213;&#8213;&#8213;&#8213;&#8213;&#8213;&#8213;&#8213;&#8213;&#8213;&#8213;&#8213;&#8213;&#8213;&#8213;&#8213;&#8213;&#8213;&#8213;&#8213;&#8213;&#8213;&#8213;&#8213;&#8213; &#8594; <span class="ha">attacker-sink</span> (data-net)
+        &#8214;&#8213;&#8213;&#8213;&#8213;&#8213;&#8213;&#8213;&#8213;&#8213;&#8213;&#8213;&#8213;&#8213;&#8213;&#8213;&#8213;&#8213;&#8213;&#8213;&#8213;&#8213;&#8213;&#8213;&#8213;&#8213;&#8213;&#8214;
+   control-net (internal)     data-net (egress OPEN &mdash; OpenShell is the only guard)</pre></div>
+
+<div class="section" id="loop"><div class="section-comment">// THE LOOP</div><h1>Observe, diagnose, propose, verify, promote</h1>
+<p class="lead">The Organized Harness loop shape, pointed at an adversarial game. Every round produces a policy diff and a data point.</p>
+<div class="tbl-wrap"><table><thead><tr><th>Step</th><th>Actor</th><th>Action</th></tr></thead><tbody>
+<tr><td class="feat">observe</td><td>controller</td><td>read HiddenLayer + OpenShell traces from the round</td></tr>
+<tr><td class="feat">diagnose</td><td>controller</td><td>identify which exfil strategy landed and how</td></tr>
+<tr><td class="feat">propose</td><td>blue &#43; Nemotron</td><td>rewrite openshell-policy.yaml to close the hole</td></tr>
+<tr><td class="feat">verify</td><td>controller</td><td>YAML parses, approved egress still passes, hole closed</td></tr>
+<tr><td class="feat">promote</td><td>controller</td><td>keep the hardened policy; snapshot to R2; rerun</td></tr>
+</tbody></table></div></div>
+
+<div class="section" id="stores"><div class="section-comment">// STORES</div><h1>Cloudflare memory</h1>
+<div class="cards">
+<div class="card"><h3>D1 &middot; reasoning log</h3><p>Every CF Worker reasoning call: <code>side</code>, tokens, latency. Proves both sides run on vLLM and gives the batching evidence.</p></div>
+<div class="card"><h3>KV &middot; round state</h3><p><code>ROUND_STATE</code> holds the current round number, active policy pointer, and last exfil-success-rate.</p></div>
+<div class="card"><h3>R2 &middot; run snapshots</h3><p><code>redblue-runs</code> stores each round&#39;s policy, traces, and rate. The dashboard reads results straight from here.</p></div>
+<div class="card"><h3>Worker Assets &middot; docs</h3><p>Guide, Wiki, Arch, Visual, and the dashboard ship from the same Worker as the API.</p></div>
+</div></div>
+
+<div class="section" id="risk"><div class="section-comment">// RISK MODEL</div><h1>Where the boundary lives</h1>
+<div class="verdict"><div class="verdict-row"><div class="vkey">Judged path</div><div class="vval"><strong>target &#8594; attacker-sink.</strong> Open at the Docker layer on purpose. The OpenShell YAML is the only thing that denies it.</div></div>
+<div class="verdict-row"><div class="vkey">Enforcement</div><div class="vval">Action-level match on destination &#43; payload shape. Secret-bearing payloads route to <code>require_operator_approval</code>, not a blunt deny.</div></div>
+<div class="verdict-row"><div class="vkey">Detection</div><div class="vval">HiddenLayer wraps all five target I&#47;O surfaces. Fail-closed on API error.</div></div>
+<div class="verdict-row"><div class="vkey">Proof</div><div class="vval">The ablation: disabling enforcement lets the same attempt through the still-open Docker path &mdash; demonstrating Docker was never the guard.</div></div></div></div>
+
+<div class="section" id="trackmap"><div class="section-comment">// TRACK MAP</div><h1>Prize &#8594; phase &#8594; exit criterion</h1>
+<div class="tbl-wrap"><table><thead><tr><th>Target</th><th>Phase</th><th>Locked when</th></tr></thead><tbody>
+<tr><td class="win">Recursive Intelligence</td><td>6</td><td>round-1 vs round-N delta &#43; ablation persisted to R2</td></tr>
+<tr><td class="win">OpenShell bounty</td><td>2</td><td>ablation proves the YAML is the sole guard</td></tr>
+<tr><td class="win">HiddenLayer</td><td>3</td><td>five surfaces instrumented, fail-closed</td></tr>
+<tr><td class="win">vLLM &#43; Nemotron</td><td>4</td><td>both sides&#39; inference on the Brev endpoint, batched</td></tr>
+<tr><td class="feat">Most Commercializable</td><td>8</td><td>narrative write-up (no extra build)</td></tr>
+</tbody></table></div></div>
+</main></div>
+<footer>Red&#47;Blue Arena Arch &middot; <a href="/redblue-arena/">home</a> &middot; <a href="/redblue-arena/guide/">guide</a> &middot; <a href="/redblue-arena/wiki/">wiki</a> &middot; <a href="/redblue-arena/visual/">visual</a></footer>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script><script>
+const links=[...document.querySelectorAll('.nav-link')];const secs=links.map(a=>document.querySelector(a.getAttribute('href')));
+const obs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting){links.forEach(l=>l.classList.remove('active'));const a=links.find(l=>l.getAttribute('href')==='#'+e.target.id);if(a)a.classList.add('active')}})},{rootMargin:'-40% 0px -55% 0px'});
+secs.forEach(s=>s&&obs.observe(s));
+if(window.gsap&&window.ScrollTrigger){gsap.registerPlugin(ScrollTrigger);gsap.utils.toArray('.section,.hero').forEach(el=>{gsap.from(el,{opacity:0,y:24,duration:.6,ease:'power2.out',scrollTrigger:{trigger:el,start:'top 85%'}})})}
+</script></body></html>

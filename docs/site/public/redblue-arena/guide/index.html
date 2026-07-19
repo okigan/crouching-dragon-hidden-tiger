@@ -1,0 +1,86 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<meta name="description" content="Build and operate the red/blue co-evolution arena."><title>Red/Blue Arena — Guide</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/redblue-arena/style.css"></head><body>
+<div class="topbar">
+  <a class="topbar-logo" href="/redblue-arena/"><span class="initials">RB</span><span class="slash">/</span><span>Red&#47;Blue Arena</span></a>
+  <div class="topbar-links"><a href="#overview">Overview</a><a href="#quickstart">Quick Start</a><a href="#phases">The Nine Phases</a><a href="#loop">Running the Loop</a><a href="#boundary">Boundary Invariant</a><a href="#deploy">Deploy</a><a href="#stack">Stack</a><a href="https://github.com/okigan/crouching-dragon-hidden-tiger" style="margin-left:8px;color:var(--teal)">GitHub</a><a href="https://organizedai.vip" style="color:var(--muted)">organizedai.vip</a></div>
+</div><div class="body-wrap"><nav class="sidebar"><div class="sidebar-section"><div class="sidebar-heading">Sections</div><a class="nav-link active" href="#overview">Overview</a><a class="nav-link" href="#quickstart">Quick Start</a><a class="nav-link" href="#phases">The Nine Phases</a><a class="nav-link" href="#loop">Running the Loop</a><a class="nav-link" href="#boundary">Boundary Invariant</a><a class="nav-link" href="#deploy">Deploy</a><a class="nav-link" href="#stack">Stack</a></div>
+  <hr class="sidebar-divider"><div class="sidebar-meta">
+  <a href="/redblue-arena/guide/">Guide &#8599;</a><a href="/redblue-arena/wiki/">Wiki &#8599;</a><a href="/redblue-arena/arch/">Arch &#8599;</a><a href="/redblue-arena/visual/">Visual &#8599;</a></div>
+  <hr class="sidebar-divider" style="margin-top:12px"><div class="sidebar-meta"><span>redblue-arena</span><span>7 sections</span><span>Docker + Cloudflare + Brev</span></div></nav><main>
+<div class="hero" id="home"><div class="hero-eyebrow">GUIDE // RED&#47;BLUE ARENA</div><h1>Build &amp; Operate</h1>
+<p class="hero-sub">How to stand up the arena, run the co-evolution loop, and deploy the surfaces. Every phase is a copy-paste Claude Code prompt with verifiable exit criteria.</p>
+<div class="pills"><div class="pill"><strong>9</strong> phases</div><div class="pill">Claude Code driven</div><div class="pill">Workers Assets</div></div></div>
+
+<div class="section" id="overview"><div class="section-comment">// CORE IDEA</div><h1>A managed adversarial improvement loop</h1>
+<p class="lead">Red and blue co-evolve. Red probes the target agent for a way past the OpenShell policy; HiddenLayer flags what it can; blue rewrites the policy to close the hole; the loop reruns. The drop in exfil-success-rate across rounds is the Recursive Intelligence delta. It borrows the Organized Harness loop shape &mdash; observe, diagnose, propose, verify, promote &mdash; and points it at an adversarial game.</p>
+<div class="kicker-grid"><div class="kicker"><div class="kicker-val">1</div><div class="kicker-lbl">boundary judged (OpenShell YAML)</div></div><div class="kicker"><div class="kicker-val">5</div><div class="kicker-lbl">HiddenLayer I&#47;O surfaces</div></div><div class="kicker"><div class="kicker-val">2</div><div class="kicker-lbl">ablation arms (on&#47;off)</div></div></div></div>
+
+<div class="section" id="quickstart"><div class="section-comment">// QUICK START</div><h1>From clone to converged</h1>
+<p class="lead">Runs offline out of the box on deterministic mocks &mdash; no credentials needed to see the loop converge. Swap in real OpenShell, HiddenLayer, and Nemotron through env-guarded seams when you have access.</p>
+<pre>git clone https://github.com/okigan/crouching-dragon-hidden-tiger
+cd crouching-dragon-hidden-tiger
+
+# one run: hardens the policy and writes a visual report
+uv run security-orchestrator run --out runs/latest --save-policy runs/hardened.yaml
+open runs/latest/report.html
+
+# the ablation: proves the policy (not the harness) stopped the attacks
+uv run security-orchestrator ablate
+
+# point the blue team at a real vLLM/Nemotron endpoint (optional)
+export LLM=nemotron NEMOTRON_BASE_URL=http://YOUR_VLLM_HOST:8000 \
+       NEMOTRON_MODEL=&lt;served-model-id&gt; NEMOTRON_KEY=&lt;key&gt;
+uv run security-orchestrator run --out runs/live</pre></div>
+
+<div class="section" id="phases"><div class="section-comment">// THE NINE PHASES</div><h1>Ordered, not time-boxed</h1>
+<p class="lead">Phases 2, 3, and 4 are independent after Phase 1 &mdash; parallelize across Claude Code sessions if you split the team.</p>
+<div class="tbl-wrap"><table><thead><tr><th>Phase</th><th>Name</th><th>Exit criterion</th></tr></thead><tbody>
+<tr><td class="feat">0</td><td>Bootstrap &amp; Scaffold</td><td>compose validates, .claude wired, repo pushed</td></tr>
+<tr><td class="feat">1</td><td>Target &#43; Sink</td><td>benign task passes; target&#8594;sink path proven OPEN</td></tr>
+<tr><td class="feat">2</td><td>OpenShell policy</td><td>ENFORCE on blocks, off exfils &mdash; YAML is the guard</td></tr>
+<tr><td class="feat">3</td><td>HiddenLayer</td><td>poison doc flagged; fail-closed verified</td></tr>
+<tr><td class="feat">4</td><td>vLLM&#47;Nemotron &#43; Worker</td><td>both sides inference on vLLM; concurrent batching</td></tr>
+<tr><td class="feat">5</td><td>Red&#47;Blue&#47;Controller</td><td>one hands-off round-trip: break in &#8594; patch &#8594; block</td></tr>
+<tr><td class="feat">6</td><td>Delta harness</td><td>round-1 vs round-N delta &#43; ablation to R2</td></tr>
+<tr><td class="feat">7</td><td>Arena dashboard</td><td>live URL renders the delta curve from R2</td></tr>
+<tr><td class="feat">8</td><td>Submission package</td><td>every checklist item has a file behind it</td></tr>
+</tbody></table></div></div>
+
+<div class="section" id="loop"><div class="section-comment">// RUNNING THE LOOP</div><h1>What happens each round</h1>
+<pre class="ascii"><span class="hr">red</span>   propose K exfil strategies vs current policy &#8594; execute via target
+<span class="ha">target</span> broker.act() checked by <span class="ha">OpenShell</span> + <span class="hr">HiddenLayer</span> on every I&#47;O
+<span class="hp">ctrl</span>  observe traces &#8594; diagnose which hole landed &#8594; hand finding to blue
+<span class="hb">blue</span>  ask Nemotron: rewrite openshell-policy.yaml to close it, keep approved egress
+<span class="hp">ctrl</span>  verify patch parses + approved calls still pass &#8594; promote &#8594; rerun
+<span class="hg">delta</span> exfil-success-rate recorded per round; snapshot policy+traces to R2</pre>
+<p>If blue&#39;s generated YAML fails to parse or does not close the hole, the <strong>operator-approval fallback</strong> fires: a human approves a hand-edit and the loop continues. A loop with a human in the promote gate still wins the track.</p></div>
+
+<div class="section" id="boundary"><div class="section-comment">// BOUNDARY INVARIANT</div><h1>Docker isolates. OpenShell guards.</h1>
+<div class="verdict"><div class="verdict-row"><div class="vkey">Invariant</div><div class="vval"><strong>The target&#8594;sink path stays OPEN at the Docker layer.</strong> Blocking exfiltration is the OpenShell YAML policy&#39;s job alone. If Docker blocks it, the OpenShell bounty is forfeit &mdash; even though the demo still works.</div></div>
+<div class="verdict-row"><div class="vkey">Segment</div><div class="vval"><code>control-net</code> (internal) isolates controller&#47;red&#47;blue &mdash; legitimate. <code>data-net</code> keeps egress open so the policy is the only guard on the judged path.</div></div></div></div>
+
+<div class="section" id="deploy"><div class="section-comment">// DEPLOY</div><h1>Wrangler prerequisites</h1>
+<p class="lead">CF MCP handles KV&#47;D1&#47;R2&#47;Workers list&#47;query. Everything below needs the Wrangler CLI.</p>
+<pre>wrangler d1 create redblue-traces &amp;&amp; wrangler d1 migrations apply redblue-traces
+wrangler kv namespace create ROUND_STATE
+wrangler r2 bucket create redblue-runs
+wrangler secret put BREV_API_TOKEN
+wrangler secret put VLLM_BASE_URL
+wrangler secret put HIDDENLAYER_API_KEY
+wrangler deploy            # [assets] block, NOT Pages</pre></div>
+
+<div class="section" id="stack"><div class="section-comment">// STACK</div><h1>What it runs on</h1>
+<div class="badge-row"><span class="badge br">HiddenLayer Runtime Security</span><span class="badge ba">OpenShell</span><span class="badge by">NemoClaw</span><span class="badge bg">Nemotron</span><span class="badge bp">vLLM &middot; Brev</span><span class="badge bb">Cloudflare Workers &#43; D1 &#43; KV &#43; R2</span><span class="badge bm">Docker Compose</span></div>
+<p>Local-first for the adversarial stack, cloud-backed for reasoning (Brev) and durable memory + docs (Cloudflare). Repo at <code>/Users/supabowl/redblue-arena</code>, pushed to <code>organized-ai</code>.</p></div>
+
+</main></div>
+<footer>Red&#47;Blue Arena Guide &middot; <a href="/redblue-arena/">home</a> &middot; <a href="/redblue-arena/wiki/">wiki</a> &middot; <a href="/redblue-arena/arch/">arch</a> &middot; <a href="/redblue-arena/visual/">visual</a></footer>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script><script>
+const links=[...document.querySelectorAll('.nav-link')];const secs=links.map(a=>document.querySelector(a.getAttribute('href')));
+const obs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting){links.forEach(l=>l.classList.remove('active'));const a=links.find(l=>l.getAttribute('href')==='#'+e.target.id);if(a)a.classList.add('active')}})},{rootMargin:'-40% 0px -55% 0px'});
+secs.forEach(s=>s&&obs.observe(s));
+if(window.gsap&&window.ScrollTrigger){gsap.registerPlugin(ScrollTrigger);gsap.utils.toArray('.section,.hero').forEach(el=>{gsap.from(el,{opacity:0,y:24,duration:.6,ease:'power2.out',scrollTrigger:{trigger:el,start:'top 85%'}})})}
+</script></body></html>
