@@ -227,6 +227,24 @@ def _live_progress() -> str:
     return lines[-1] if lines else ""
 
 
+def _params_chips(p: dict) -> str:
+    """The run's parameters as labelled chips for the live status banner."""
+    if not p:
+        return ""
+    coverage = ("full taxonomy sweep" if p.get("full")
+                else f'{p.get("tries", "?")} tries / category')
+    chips = [
+        ("🧠 model", p.get("model", "default")),
+        ("coverage", coverage),
+        ("tactics", p.get("tactics", "all")),
+        ("categories", p.get("categories", "all")),
+    ]
+    return ('<div class="st-params">' + "".join(
+        f'<span class="pchip"><span class="pk">{html.escape(k)}</span>'
+        f'<span class="pv">{html.escape(str(v))}</span></span>'
+        for k, v in chips) + '</div>')
+
+
 def _run_dirs() -> list[Path]:
     if not RUNS_DIR.is_dir():
         return []
@@ -404,7 +422,15 @@ def run(generate: int = Form(3), model: str = Form(""),
     cat_arg = ",".join(sorted(sel_cat)) if 0 < len(sel_cat) < len(CATEGORIES) else ""
     if not _job["active"]:
         name = "run-" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
-        _job.update(active=True, name=name, container=None, error=None)
+        params = {
+            "model": model or _current_model() or "default",
+            "tries": generate,
+            "full": bool(full),
+            "tactics": tac_arg or "all",
+            "categories": cat_arg or "all",
+        }
+        _job.update(active=True, name=name, container=None, error=None,
+                    params=params)
         threading.Thread(
             target=_launch,
             args=(name, generate, model, tac_arg, cat_arg, bool(full)),
@@ -427,6 +453,7 @@ def index() -> str:
             f'<div class="st-row"><span class="spin"></span><b>Running</b> '
             f'<code>{cname}</code></div>'
             f'<div class="st-prog">{prog}</div>'
+            f'{_params_chips(_job.get("params") or {})}'
             '<div class="st-sub">generate prompts → screen HiddenLayer → harden '
             'OpenShell · live, auto-refreshing every few seconds</div>'
             "<script>setTimeout(function(){location.reload()},2500)</script>"
@@ -669,7 +696,15 @@ _PAGE = """<!doctype html><html lang="en"><head><meta charset="utf-8">
   @keyframes spin { to { transform:rotate(360deg); } }
   .st-prog { margin-top:8px; font-size:14px; font-weight:600; color:var(--accent);
     font-variant-numeric:tabular-nums; }
-  .st-sub { margin-top:5px; font-size:11.5px; color:var(--muted); }
+  .st-params { display:flex; flex-wrap:wrap; gap:8px; margin-top:11px; }
+  .pchip { display:inline-flex; align-items:center; gap:7px; font-size:11.5px;
+    background:var(--card); border:1px solid var(--line); border-radius:20px;
+    padding:3px 4px 3px 10px; max-width:100%; }
+  .pchip .pk { color:var(--muted); white-space:nowrap; }
+  .pchip .pv { background:rgba(52,87,213,.10); color:var(--accent); font-weight:600;
+    border-radius:16px; padding:2px 9px; font-variant-numeric:tabular-nums;
+    max-width:340px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .st-sub { margin-top:9px; font-size:11.5px; color:var(--muted); }
   .run-error { background:rgba(179,21,59,.12); color:#e0607f; white-space:pre-wrap; }
 </style></head><body><div class="wrap">
   <h1>Crouching Dragon Hidden Tiger</h1>
