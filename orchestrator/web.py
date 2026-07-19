@@ -255,19 +255,27 @@ def _run_dirs() -> list[Path]:
 
 
 def _format_when(iso: str | None, run_name: str) -> str:
-    """Human timestamp for a run: the report's Generated time (UTC), falling back
-    to the run-<YYYYMMDD-HHMMSS> directory name."""
+    """A <time> element carrying the run's UTC timestamp — the data stays UTC and
+    the page's JS rewrites it to the viewer's local time. Source is the report's
+    Generated time, falling back to the run-<YYYYMMDD-HHMMSS> dir name (container
+    clock is UTC). Empty string if neither is available."""
+    dt_iso, text = "", ""
     if iso:
         try:
             dt = datetime.datetime.fromisoformat(iso)
-            return dt.strftime("%Y-%m-%d %H:%M UTC")
+            dt_iso, text = dt.isoformat(), dt.strftime("%Y-%m-%d %H:%M UTC")
         except ValueError:
             pass
-    m = re.match(r"run-(\d{8})-(\d{6})", run_name)
-    if m:
-        d, t = m.group(1), m.group(2)
-        return f"{d[:4]}-{d[4:6]}-{d[6:]} {t[:2]}:{t[2:4]}"
-    return ""
+    if not dt_iso:
+        m = re.match(r"run-(\d{8})-(\d{6})", run_name)
+        if m:
+            d, t = m.group(1), m.group(2)
+            dt_iso = f"{d[:4]}-{d[4:6]}-{d[6:]}T{t[:2]}:{t[2:4]}:{t[4:6]}Z"
+            text = f"{d[:4]}-{d[4:6]}-{d[6:]} {t[:2]}:{t[2:4]} UTC"
+    if not dt_iso:
+        return ""
+    return (f'<time class="lt" datetime="{html.escape(dt_iso)}">'
+            f'{html.escape(text)}</time>')
 
 
 def _summary(run: Path) -> dict:
@@ -380,7 +388,7 @@ def _card(info: dict) -> str:
 
     sub_parts = []
     if info.get("when"):
-        sub_parts.append(html.escape(info["when"]))
+        sub_parts.append(info["when"])  # already-safe <time> HTML
     if info.get("llm"):
         sub_parts.append(html.escape(info["llm"]))
     subline = (f'<div class="run-sub">{" &middot; ".join(sub_parts)}</div>'
@@ -721,4 +729,15 @@ _PAGE = """<!doctype html><html lang="en"><head><meta charset="utf-8">
   </form>
   {{status}}
   {{cards}}
-</div></body></html>"""
+</div>
+<script>
+  // Render every UTC <time class="lt"> in the viewer's local timezone.
+  document.querySelectorAll('time.lt').forEach(function(t){
+    var iso=t.getAttribute('datetime'); if(!iso) return;
+    var d=new Date(iso); if(isNaN(d)) return;
+    t.textContent=d.toLocaleString([],{year:'numeric',month:'short',day:'numeric',
+      hour:'2-digit',minute:'2-digit'});
+    t.title=iso;
+  });
+</script>
+</body></html>"""
