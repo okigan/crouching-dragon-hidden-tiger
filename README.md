@@ -159,12 +159,14 @@ honest, not aspirational.
 
 | Target | Type | Status | What backs it |
 |--------|------|--------|---------------|
-| **Recursive Intelligence** | Track | ✅ Demonstrated | Run-over-run improvement is *measured*: the ablation harness reports exfil-success-rate 100%→0% with enforcement on vs. a flat 100% control — `security-orchestrator ablate`, plus the convergence curve in every report. |
-| **Best Use of vLLM** | Bounty | ✅ Demonstrated | A live OpenAI-compatible vLLM endpoint drives the blue team (`NemotronLLM`), with response validation and a heuristic fallback. Ran end-to-end against a self-hosted endpoint. |
-| **NVIDIA OpenShell** (policy is the sole guard) | Bounty | ◑ Architected | The sandbox models OpenShell as the *sole* egress guard, with the enforcement on/off ablation that proves the policy — not the harness — stops attacks. Real OpenShell CLI/schema wiring is a seam. |
-| **HiddenLayer Runtime Security** | Bounty | ✅ Demonstrated | Every attack payload is sent through HiddenLayer's live prompt analyzer; real, **distinct** detections (OWASP LLM01 prompt-injection, `input_pii`, `input_code`, unsafe-input) drive the findings, each mapping to a different OpenShell control, and the assessor is **fail-closed** on API/WAF errors. Enable with `ASSESSOR=hiddenlayer`. |
-| **Best Use of Nemotron** | Bounty | ◑ Ready | The vLLM adapter is model-agnostic and runs today against any served model; point `NEMOTRON_MODEL` at Nemotron to make it the reasoning model for the blue team. |
+| **Recursive Intelligence** | Track | ✅ Demonstrated | Run-over-run improvement is *measured*: the ablation harness reports exfil-success-rate 100%→0% with enforcement on vs. a flat 100% control (`security-orchestrator ablate`), and the loop is **adaptive** — each round re-generates attacks seeded on the prior round's survivors, so the blue team hardens against an escalating red team (convergence curve in every report). |
+| **NVIDIA OpenShell** (policy is the sole guard) | Bounty | ✅ Demonstrated | Real OpenShell gateway is the *sole* guard: the loop deploys a live sandbox, translates our policy to OpenShell YAML and `policy set`s it, and **observes** egress enforcement by exec'ing a real `curl` inside the sandbox each round (allow-listed host 200 → 403 after blue removes it). The blue-team LLM **authors the policy ops** directly via structured output (`response_format` json_schema), validated against the schema. Enforcement on/off ablation proves the policy — not the harness — stops attacks. |
+| **HiddenLayer Runtime Security** | Bounty | ✅ Demonstrated | Every attack is screened through HiddenLayer's live prompt analyzer; real, **distinct** detections drive the findings and the assessor is **fail-closed** on API/WAF errors. The red team is grounded in the full vendored **APE taxonomy** — all 47 techniques × 22 objectives (1034 specs), sweepable end-to-end (`make taxonomy-sweep`). Enable with `ASSESSOR=hiddenlayer`. |
+| **Best Use of Nemotron** | Bounty | ✅ Demonstrated | Nemotron 3 Nano Omni (30B-A3B) served via OpenRouter drives both the red-team generator and the blue-team policy author; point `NEMOTRON_MODEL` at any served model to swap it (verified against Nemotron on OpenRouter and self-hosted Qwen). |
+| **Best Use of vLLM** | Bounty | ✅ Demonstrated | A self-hosted OpenAI-compatible vLLM endpoint (`deploy/vllm/`) serves the model that drives the loop, selectable per-run in the web UI alongside OpenRouter; ran end-to-end against it. |
 | **Most Commercializable** | Bounty (optional) | ○ Narrative | Positioning: autonomous-agent security co-evaluation as a product. |
 
 Legend: ✅ demonstrated · ◑ architected, real integration pending credentials ·
-○ narrative only.
+○ narrative only. Real backends are the default; the offline mocks are **test-only**
+(selected solely by `SANDBOX`/`ASSESSOR`/`LLM=mock` for unit/integration tests and
+the offline `make taxonomy-sweep`) and never a silent fallback in a real run.

@@ -74,16 +74,25 @@ class Settings:
         raise ValueError(f"unknown ASSESSOR={self.assessor}")
 
     def build_generator(self):
-        """Red-team attack generator. Uses the vLLM when the LLM backend is
-        Nemotron and configured; otherwise a deterministic offline mock."""
+        """Red-team attack generator. The offline MockGenerator is TEST-ONLY —
+        selected only by an explicit LLM=mock (unit/integration tests, the
+        offline `make taxonomy-sweep`). A real run uses the configured LLM and
+        fails loudly if it isn't set, rather than silently generating canned
+        attacks."""
         from . import generator
 
-        if self.llm == "nemotron" and self.nemotron_base_url:
+        if self.llm == "mock":
+            return generator.MockGenerator()
+        if self.llm == "nemotron":
+            if not self.nemotron_base_url:
+                raise real.MissingCredentials(
+                    "Nemotron generator requires NEMOTRON_BASE_URL "
+                    "(set LLM=mock only for tests)")
             return generator.NemotronGenerator(
                 self.nemotron_base_url, self.nemotron_key,
                 self.nemotron_model, self.nemotron_timeout,
             )
-        return generator.MockGenerator()
+        raise ValueError(f"unknown LLM={self.llm}")
 
     def build_llm(self) -> LLM:
         if self.llm == "mock":
