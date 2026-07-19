@@ -50,9 +50,11 @@ def _run(args: argparse.Namespace) -> int:
         config=LoopConfig(agent=args.agent, max_iters=args.max_iters, enforce=enforce),
     )
     result = orch.run()
+    result.llm_backend = settings.llm
+    result.llm_model = settings.nemotron_model if settings.llm == "nemotron" else settings.llm
     print(reporter.summarize(result))
     print(f"backends: sandbox={settings.sandbox} assessor={settings.assessor} "
-          f"llm={settings.llm} · enforce={enforce}")
+          f"llm={settings.llm}({result.llm_model}) · enforce={enforce}")
     if args.out:
         print(f"visual report: {Path(args.out) / 'report.html'}")
         print(f"attack prompts: {Path(args.out) / 'attacks.json'} · "
