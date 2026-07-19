@@ -237,34 +237,49 @@ def _card(info: dict) -> str:
     n = html.escape(info["name"])
     conv = info.get("converged", "?")
     badge = "ok" if conv.lower().startswith("y") else "warn"
-    bits = []
-    if "success" in info:
-        bits.append(f'<span class="k">{html.escape(info["success"])}</span> attack-success')
-    if "rounds" in info:
-        bits.append(f'<span class="k">{html.escape(info["rounds"])}</span> rounds')
+    badge_txt = "converged" if badge == "ok" else html.escape(conv)
+
+    # attack success: "60% → 0% (delta +60%)" → value + green delta chip
+    succ_val, delta = html.escape(info.get("success", "")), ""
+    m = re.match(r"(.+?)\s*\(delta\s*([^)]+)\)", info.get("success", ""))
+    if m:
+        succ_val = html.escape(m.group(1).strip())
+        delta = f' <span class="delta">{html.escape(m.group(2).strip())}</span>'
+
+    stats = []
+    if succ_val:
+        stats.append(f'<div class="stat"><b>{succ_val}</b>'
+                     f'<em>attack success{delta}</em></div>')
+    if info.get("rounds"):
+        stats.append(f'<div class="stat"><b>{html.escape(info["rounds"])}</b>'
+                     f'<em>rounds</em></div>')
     if "attacks" in info:
-        bits.append(f'<span class="k">{info.get("bypass_hl", 0)}</span> bypass HiddenLayer · '
-                    f'<span class="k">{info.get("bypass_os", 0)}</span> bypass OpenShell')
-    meta = " · ".join(bits)
-    log_link = (f' · <a class="sub-link" href="/log/{n}">log</a>'
-                if info.get("has_log") else "")
+        stats.append(f'<div class="stat"><b>{info.get("bypass_hl", 0)} / '
+                     f'{info.get("bypass_os", 0)}</b><em>bypass HL / OpenShell</em></div>')
+    stats_html = f'<div class="stats">{"".join(stats)}</div>'
+
     sub_bits = []
     if info.get("when"):
-        sub_bits.append(f'🕐 {html.escape(info["when"])}')
+        sub_bits.append(f'<span>🕐 {html.escape(info["when"])}</span>')
     if info.get("llm"):
-        sub_bits.append(f'🧠 {html.escape(info["llm"])}')
-    subline = (f'<div class="run-sub">{" · ".join(sub_bits)}</div>'
+        sub_bits.append(f'<span>🧠 {html.escape(info["llm"])}</span>')
+    subline = (f'<div class="run-sub">{"".join(sub_bits)}</div>'
                if sub_bits else "")
+
+    log_link = (f'<a href="/log/{n}">log</a>' if info.get("has_log") else "")
+    chart = info.get("chart", "")
+    chart_block = (f'<div class="run-chart">{chart}'
+                   f'<span class="chart-cap">% defended ↑</span></div>' if chart else "")
     return (
         f'<div class="run">'
         f'<div class="run-main">'
-        f'<div class="run-head"><span class="badge {badge}">{html.escape(conv)}</span>'
-        f'<a class="run-title" href="/runs/{n}/report.html"><b>{n}</b></a></div>'
+        f'<div class="run-head"><span class="badge {badge}">{badge_txt}</span>'
+        f'<a class="run-title" href="/runs/{n}/report.html">{n}</a></div>'
         f'{subline}'
-        f'<div class="meta">{meta}</div>'
-        f'<div class="links"><a href="/runs/{n}/report.html">report</a>{log_link}</div>'
+        f'{stats_html}'
+        f'<div class="links"><a href="/runs/{n}/report.html">open report</a>{log_link}</div>'
         f'</div>'
-        f'{info.get("chart", "")}'
+        f'{chart_block}'
         f'</div>'
     )
 
@@ -349,36 +364,47 @@ _PAGE = """<!doctype html><html lang="en"><head><meta charset="utf-8">
     font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; }
   /* Faint dragon (left) + tiger (right) backdrop — the namesake, kept subtle. */
   body::before, body::after { content:""; position:fixed; top:50%;
-    transform:translateY(-50%); font-size:44vh; line-height:1; z-index:0;
-    opacity:.05; pointer-events:none; user-select:none; }
-  body::before { content:"🐉"; left:-.12em; }
-  body::after { content:"🐅"; right:-.12em; }
-  @media (max-width:900px) { body::before, body::after { display:none; } }
+    transform:translateY(-50%); font-size:52vh; line-height:1; z-index:0;
+    opacity:.16; pointer-events:none; user-select:none; }
+  body::before { content:"🐉"; left:-.08em; }
+  body::after { content:"🐅"; right:-.08em; transform:translateY(-50%) scaleX(-1); }
+  @media (prefers-color-scheme: dark) { body::before, body::after { opacity:.20; } }
+  @media (max-width:1100px) { body::before, body::after { opacity:.08; } }
+  @media (max-width:820px) { body::before, body::after { display:none; } }
   .wrap { max-width:820px; margin:0 auto; padding:28px 18px 60px;
     position:relative; z-index:1; }
   h1 { font-size:22px; margin:0 0 2px; } .sub { color:var(--muted); font-size:13px; margin-bottom:22px; }
-  .run { display:flex; align-items:center; gap:16px; text-decoration:none; color:inherit;
-    background:var(--card); border:1px solid var(--line); border-radius:12px;
-    padding:14px 16px; margin-bottom:12px; }
+  .run { display:flex; align-items:center; gap:20px; text-decoration:none; color:inherit;
+    background:var(--card); border:1px solid var(--line); border-radius:14px;
+    padding:18px 20px; margin-bottom:14px; box-shadow:0 1px 2px rgba(0,0,0,.04);
+    transition:border-color .12s, box-shadow .12s; }
   .run-main { flex:1; min-width:0; }
-  .run:hover { border-color:var(--accent); }
-  .mchart { display:flex; align-items:flex-end; gap:3px; height:42px; flex:none; }
-  .mcol { width:10px; height:100%; display:flex; flex-direction:column;
-    justify-content:flex-end; border-radius:2px; overflow:hidden;
+  .run:hover { border-color:var(--accent); box-shadow:0 3px 12px rgba(52,87,213,.10); }
+  .run-head { display:flex; align-items:center; gap:10px; }
+  .run-title { text-decoration:none; color:inherit; font-weight:700; font-size:16px;
+    font-variant-numeric:tabular-nums; }
+  .run-title:hover { color:var(--accent); }
+  .run-sub { color:var(--muted); font-size:12px; margin-top:6px; display:flex;
+    gap:14px; flex-wrap:wrap; }
+  .stats { display:flex; gap:26px; flex-wrap:wrap; margin-top:12px; }
+  .stat { display:flex; flex-direction:column; gap:1px; }
+  .stat b { font-size:16px; font-weight:700; font-variant-numeric:tabular-nums; }
+  .stat em { font-style:normal; color:var(--muted); font-size:11px; }
+  .stat .delta { color:#2fbd6b; font-weight:700; }
+  .links { margin-top:12px; font-size:12px; display:flex; gap:14px; }
+  .links a, .sub-link { color:var(--accent); text-decoration:none; font-weight:500; }
+  .links a:hover { text-decoration:underline; }
+  .badge { font-size:10px; font-weight:700; padding:3px 9px; border-radius:20px;
+    text-transform:uppercase; letter-spacing:.03em; }
+  .badge.ok { background:#12321f; color:#5fdd91; } .badge.warn { background:#3a2410; color:#f0a860; }
+  .run-chart { display:flex; flex-direction:column; align-items:center; gap:6px; flex:none; }
+  .chart-cap { font-size:10px; color:var(--muted); white-space:nowrap; }
+  .mchart { display:flex; align-items:flex-end; gap:4px; height:52px; }
+  .mcol { width:12px; height:100%; display:flex; flex-direction:column;
+    justify-content:flex-end; border-radius:3px; overflow:hidden;
     background:rgba(128,128,128,.12); }
   .ms { width:100%; display:block; }
   .ms.hl { background:#2fbd6b; } .ms.os { background:#3457d5; } .ms.landed { background:#d5304a; }
-  .run-title { text-decoration:none; color:inherit; }
-  .run-title:hover { color:var(--accent); }
-  .links { margin-top:8px; font-size:12px; display:flex; gap:2px; }
-  .links a, .sub-link { color:var(--accent); text-decoration:none; }
-  .links a:hover { text-decoration:underline; }
-  .run-head { display:flex; align-items:center; gap:10px; }
-  .run-sub { color:var(--muted); font-size:12px; margin-top:5px; display:flex;
-    gap:12px; flex-wrap:wrap; }
-  .badge { font-size:11px; font-weight:700; padding:2px 8px; border-radius:20px; text-transform:uppercase; }
-  .badge.ok { background:#12321f; color:#5fdd91; } .badge.warn { background:#3a2410; color:#f0a860; }
-  .meta { color:var(--muted); font-size:13px; margin-top:6px; } .meta .k { color:var(--fg); font-weight:600; }
   .empty { color:var(--muted); } code { background:rgba(128,128,128,.15); padding:1px 5px; border-radius:5px; }
   .runbar { display:flex; align-items:center; gap:10px; flex-wrap:wrap; background:var(--card);
     border:1px solid var(--line); border-radius:12px; padding:12px 14px; margin-bottom:14px; }
