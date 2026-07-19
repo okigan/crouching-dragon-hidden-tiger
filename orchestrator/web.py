@@ -304,18 +304,18 @@ def _card(info: dict) -> str:
                      f'<em>caught by HiddenLayer / OpenShell</em></div>')
     stats_html = f'<div class="stats">{"".join(stats)}</div>'
 
-    sub_bits = []
+    sub_parts = []
     if info.get("when"):
-        sub_bits.append(f'<span>🕐 {html.escape(info["when"])}</span>')
+        sub_parts.append(html.escape(info["when"]))
     if info.get("llm"):
-        sub_bits.append(f'<span>🧠 {html.escape(info["llm"])}</span>')
-    subline = (f'<div class="run-sub">{"".join(sub_bits)}</div>'
-               if sub_bits else "")
+        sub_parts.append(html.escape(info["llm"]))
+    subline = (f'<div class="run-sub">{" &middot; ".join(sub_parts)}</div>'
+               if sub_parts else "")
 
     log_link = (f'<a href="/log/{n}">log</a>' if info.get("has_log") else "")
     chart = info.get("chart", "")
     chart_block = (f'<div class="run-chart">{chart}'
-                   f'<span class="chart-cap">% defended ↑</span></div>' if chart else "")
+                   f'<span class="chart-cap">defended / round</span></div>' if chart else "")
     return (
         f'<div class="run">'
         f'<div class="run-id">'
@@ -324,7 +324,8 @@ def _card(info: dict) -> str:
         f'{subline}'
         f'<div class="links"><a href="/runs/{n}/report.html">open report</a>{log_link}</div>'
         f'</div>'
-        f'<div class="run-metrics">{stats_html}{chart_block}</div>'
+        f'{stats_html}'
+        f'{chart_block}'
         f'</div>'
     )
 
@@ -410,48 +411,51 @@ _PAGE = """<!doctype html><html lang="en"><head><meta charset="utf-8">
   /* Faint dragon (left) + tiger (right) backdrop — the namesake, kept subtle. */
   body::before, body::after { content:""; position:fixed; top:50%;
     transform:translateY(-50%); font-size:52vh; line-height:1; z-index:0;
-    opacity:.16; pointer-events:none; user-select:none; }
-  body::before { content:"🐉"; left:-.08em; }
-  body::after { content:"🐅"; right:-.08em; transform:translateY(-50%) scaleX(-1); }
-  @media (prefers-color-scheme: dark) { body::before, body::after { opacity:.20; } }
-  @media (max-width:1180px) { body::before, body::after { opacity:.08; } }
+    opacity:.06; pointer-events:none; user-select:none; }
+  body::before { content:"🐉"; left:-.1em; }
+  body::after { content:"🐅"; right:-.1em; transform:translateY(-50%) scaleX(-1); }
+  @media (prefers-color-scheme: dark) { body::before, body::after { opacity:.09; } }
+  @media (max-width:1180px) { body::before, body::after { opacity:.04; } }
   @media (max-width:900px) { body::before, body::after { display:none; } }
   .wrap { max-width:1060px; margin:0 auto; padding:40px 28px 80px;
     position:relative; z-index:1; }
   h1 { font-size:24px; margin:0 0 4px; } .sub { color:var(--muted); font-size:13px; margin-bottom:28px; }
-  .run { display:flex; align-items:center; justify-content:space-between; gap:32px;
-    flex-wrap:wrap; text-decoration:none; color:inherit;
-    background:var(--card); border:1px solid var(--line); border-radius:14px;
-    padding:22px 26px; margin-bottom:16px; box-shadow:0 1px 2px rgba(0,0,0,.04);
+  .run { display:grid; grid-template-columns:minmax(260px,1fr) auto auto;
+    align-items:center; column-gap:40px; row-gap:18px; color:inherit;
+    background:var(--card); border:1px solid var(--line); border-radius:12px;
+    padding:20px 24px; margin-bottom:12px;
     transition:border-color .12s, box-shadow .12s; }
-  .run-id { min-width:220px; }
-  .run-metrics { display:flex; align-items:center; gap:44px; flex-wrap:wrap; }
-  .run:hover { border-color:var(--accent); box-shadow:0 3px 12px rgba(52,87,213,.10); }
+  .run:hover { border-color:var(--accent); box-shadow:0 2px 10px rgba(15,23,42,.06); }
+  .run-id { min-width:0; }
   .run-head { display:flex; align-items:center; gap:12px; }
-  .run-title { text-decoration:none; color:inherit; font-weight:700; font-size:17px;
-    font-variant-numeric:tabular-nums; }
+  .run-title { text-decoration:none; color:inherit; font-weight:600; font-size:15px;
+    font-variant-numeric:tabular-nums; letter-spacing:-.01em; }
   .run-title:hover { color:var(--accent); }
-  .run-sub { color:var(--muted); font-size:12px; margin-top:10px; display:flex;
-    gap:18px; flex-wrap:wrap; }
-  .stats { display:flex; gap:36px; flex-wrap:wrap; }
-  .stat { display:flex; flex-direction:column; gap:3px; }
-  .stat b { font-size:17px; font-weight:700; font-variant-numeric:tabular-nums; }
+  .run-sub { color:var(--muted); font-size:12.5px; margin-top:7px;
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .stats { display:flex; gap:34px; }
+  .stat { display:flex; flex-direction:column; gap:4px; }
+  @media (max-width:820px) { .run { grid-template-columns:1fr; column-gap:0; } }
+  .stat b { font-size:16px; font-weight:600; font-variant-numeric:tabular-nums;
+    letter-spacing:-.01em; }
   .stat em { font-style:normal; color:var(--muted); font-size:11px; }
-  .stat .delta { color:#2fbd6b; font-weight:700; }
-  .links { margin-top:18px; font-size:12px; display:flex; gap:16px; }
+  .stat .delta { color:#0f9d74; font-weight:600; }
+  .links { margin-top:16px; font-size:12px; display:flex; gap:16px; }
   .links a, .sub-link { color:var(--accent); text-decoration:none; font-weight:500; }
   .links a:hover { text-decoration:underline; }
-  .badge { font-size:10px; font-weight:700; padding:3px 9px; border-radius:20px;
-    text-transform:uppercase; letter-spacing:.03em; }
-  .badge.ok { background:#12321f; color:#5fdd91; } .badge.warn { background:#3a2410; color:#f0a860; }
-  .run-chart { display:flex; flex-direction:column; align-items:center; gap:6px; flex:none; }
-  .chart-cap { font-size:10px; color:var(--muted); white-space:nowrap; }
-  .mchart { display:flex; align-items:flex-end; gap:5px; height:58px; }
-  .mcol { width:13px; height:100%; display:flex; flex-direction:column;
-    justify-content:flex-end; border-radius:3px; overflow:hidden;
-    background:rgba(128,128,128,.12); }
+  .badge { font-size:9.5px; font-weight:700; padding:3px 8px; border-radius:5px;
+    text-transform:uppercase; letter-spacing:.04em; border:1px solid transparent; }
+  .badge.ok { background:rgba(15,157,116,.12); color:#0f9d74; border-color:rgba(15,157,116,.25); }
+  .badge.warn { background:rgba(224,138,50,.12); color:#c8791d; border-color:rgba(224,138,50,.25); }
+  .run-chart { display:flex; flex-direction:column; align-items:center; gap:8px; flex:none; }
+  .chart-cap { font-size:10px; color:var(--muted); white-space:nowrap;
+    letter-spacing:.02em; }
+  .mchart { display:flex; align-items:flex-end; gap:4px; height:46px; }
+  .mcol { width:9px; height:100%; display:flex; flex-direction:column;
+    justify-content:flex-end; border-radius:2px; overflow:hidden;
+    background:rgba(120,130,145,.10); }
   .ms { width:100%; display:block; }
-  .ms.hl { background:#2fbd6b; } .ms.os { background:#3457d5; } .ms.landed { background:#d5304a; }
+  .ms.hl { background:#0f9d74; } .ms.os { background:#3b5bde; } .ms.landed { background:#e0576b; }
   .empty { color:var(--muted); } code { background:rgba(128,128,128,.15); padding:1px 5px; border-radius:5px; }
   .runbar { display:flex; align-items:center; gap:16px; flex-wrap:wrap; background:var(--card);
     border:1px solid var(--line); border-radius:14px; padding:16px 20px; margin-bottom:20px; }
