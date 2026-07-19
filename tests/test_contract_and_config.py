@@ -45,6 +45,22 @@ def test_mock_env_selects_mocks():
     assert isinstance(s.build_llm(), mock.MockLLM)
 
 
+def test_mock_generator_is_test_only_never_a_silent_fallback():
+    from orchestrator.generator import MockGenerator, NemotronGenerator
+
+    # MockGenerator only when LLM=mock is explicitly set (tests / offline sweep)
+    assert isinstance(
+        Settings.from_env(env={"LLM": "mock"}).build_generator(), MockGenerator)
+    # a real run with the LLM misconfigured must FAIL LOUDLY, not mock silently
+    with pytest.raises(real.MissingCredentials):
+        Settings.from_env(env={"LLM": "nemotron"}).build_generator()
+    # configured -> the real generator
+    assert isinstance(
+        Settings.from_env(env={"LLM": "nemotron",
+                               "NEMOTRON_BASE_URL": "http://vllm:8000"}
+                          ).build_generator(), NemotronGenerator)
+
+
 def test_config_selects_real_backends():
     s = Settings.from_env(env={
         "SANDBOX": "openshell", "OPENSHELL_GATEWAY_ENDPOINT": "http://gw:8080",
