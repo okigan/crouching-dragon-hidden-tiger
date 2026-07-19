@@ -20,7 +20,7 @@ import threading
 from pathlib import Path
 
 from fastapi import FastAPI, Form
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 RUNS_DIR = Path(os.environ.get("RUNS_DIR", "runs"))
@@ -82,12 +82,15 @@ def _launch(name: str, generate: int) -> None:
         _job["container"] = container.name
         status = container.wait()  # blocks until the run finishes
         code = status.get("StatusCode", 0)
+        # The container removes itself below (no lingering entries), so persist
+        # its logs to the run dir first — otherwise they vanish with it.
+        _save_logs(container, name)
         # A crash and a "did not converge" both exit 1, so the exit code alone
         # can't tell success from failure — the report file is the real signal.
         report_written = (RUNS_DIR / name / "report.html").exists()
         if not report_written:
-            logs = container.logs(tail=30).decode("utf-8", "replace")
-            _job["error"] = f"run container exited {code} without a report\n{logs}"
+            tail = container.logs(tail=30).decode("utf-8", "replace")
+            _job["error"] = f"run container exited {code} without a report\n{tail}"
     except Exception as exc:  # surface any failure in the UI
         _job["error"] = f"{type(exc).__name__}: {exc}"
     finally:
@@ -97,6 +100,18 @@ def _launch(name: str, generate: int) -> None:
             except Exception:
                 pass
         _job.update(active=False, container=None)
+
+
+def _save_logs(container, name: str) -> None:
+    """Persist the run container's stdout/stderr to runs/<name>/run.log so it
+    survives the container's self-removal (viewable in the UI at /runs/…/run.log)."""
+    try:
+        text = container.logs(timestamps=True).decode("utf-8", "replace")
+        run_dir = RUNS_DIR / name
+        run_dir.mkdir(parents=True, exist_ok=True)
+        (run_dir / "run.log").write_text(text)
+    except Exception:
+        pass
 
 
 def _run_dirs() -> list[Path]:
@@ -127,6 +142,7 @@ def _summary(run: Path) -> dict:
             info["attacks"] = len(atk)
         except ValueError:
             pass
+    info["has_log"] = (run / "run.log").exists()
     return info
 
 
@@ -143,11 +159,15 @@ def _card(info: dict) -> str:
         bits.append(f'<span class="k">{info.get("bypass_hl", 0)}</span> bypass HiddenLayer · '
                     f'<span class="k">{info.get("bypass_os", 0)}</span> bypass OpenShell')
     meta = " · ".join(bits)
+    log_link = (f' · <a class="sub-link" href="/log/{n}">log</a>'
+                if info.get("has_log") else "")
     return (
-        f'<a class="run" href="/runs/{n}/report.html">'
+        f'<div class="run">'
         f'<div class="run-head"><span class="badge {badge}">{html.escape(conv)}</span>'
-        f'<b>{n}</b></div>'
-        f'<div class="meta">{meta}</div></a>'
+        f'<a class="run-title" href="/runs/{n}/report.html"><b>{n}</b></a></div>'
+        f'<div class="meta">{meta}</div>'
+        f'<div class="links"><a href="/runs/{n}/report.html">report</a>{log_link}</div>'
+        f'</div>'
     )
 
 
@@ -183,6 +203,16 @@ def index() -> str:
             .replace("{{status}}", status))
 
 
+@app.get("/log/{name}", response_class=PlainTextResponse)
+def log(name: str) -> PlainTextResponse:
+    """Serve a run's captured container log inline as text (it outlives the
+    self-removing run container). ``name`` is confined to a child of runs/."""
+    p = (RUNS_DIR / name / "run.log").resolve()
+    if RUNS_DIR.resolve() not in p.parents or not p.is_file():
+        return PlainTextResponse("no log for this run", status_code=404)
+    return PlainTextResponse(p.read_text())
+
+
 @app.get("/healthz")
 def healthz() -> dict:
     return {"ok": True, "runs": len(_run_dirs()), "running": _job["active"]}
@@ -201,6 +231,11 @@ _PAGE = """<!doctype html><html lang="en"><head><meta charset="utf-8">
   .run { display:block; text-decoration:none; color:inherit; background:var(--card);
     border:1px solid var(--line); border-radius:12px; padding:14px 16px; margin-bottom:12px; }
   .run:hover { border-color:var(--accent); }
+  .run-title { text-decoration:none; color:inherit; }
+  .run-title:hover { color:var(--accent); }
+  .links { margin-top:8px; font-size:12px; display:flex; gap:2px; }
+  .links a, .sub-link { color:var(--accent); text-decoration:none; }
+  .links a:hover { text-decoration:underline; }
   .run-head { display:flex; align-items:center; gap:10px; }
   .badge { font-size:11px; font-weight:700; padding:2px 8px; border-radius:20px; text-transform:uppercase; }
   .badge.ok { background:#12321f; color:#5fdd91; } .badge.warn { background:#3a2410; color:#f0a860; }
