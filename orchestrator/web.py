@@ -197,6 +197,28 @@ def _save_logs(container, name: str) -> None:
         pass
 
 
+def _live_progress() -> str:
+    """The latest progress line from the running container's live logs — e.g.
+    '[round 2] assessed 11 attacks · 4 landed · 7 defended'. Empty if the
+    container isn't up yet or its logs aren't reachable."""
+    cname = _job.get("container")
+    if not cname:
+        return ""
+    try:
+        import docker
+
+        raw = docker.from_env().containers.get(cname).logs(tail=50)
+        text = raw.decode("utf-8", "replace")
+    except Exception:
+        return ""
+    lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
+    for ln in reversed(lines):  # newest meaningful step first
+        if (ln.startswith("[round") or ln.startswith("generated")
+                or "converged" in ln or "visual report" in ln):
+            return ln
+    return lines[-1] if lines else ""
+
+
 def _run_dirs() -> list[Path]:
     if not RUNS_DIR.is_dir():
         return []
@@ -374,10 +396,17 @@ def index() -> str:
         '<p class="empty">No runs yet — click <b>Run analysis</b> above.</p>'
     if _job["active"]:
         cname = html.escape(_job.get("container") or "starting…")
-        status = (f'<div class="status run-active">⏳ Running in container '
-                  f'<code>{cname}</code> — generating prompts, screening HiddenLayer, '
-                  "hardening OpenShell. Watch it in Docker; it removes itself when done. "
-                  '<a href="/">refresh</a></div>')
+        prog = html.escape(_live_progress()
+                           or "starting the container — generating the attack corpus…")
+        status = (
+            '<div class="status run-active">'
+            f'<div class="st-row"><span class="spin"></span><b>Running</b> '
+            f'<code>{cname}</code></div>'
+            f'<div class="st-prog">{prog}</div>'
+            '<div class="st-sub">generate prompts → screen HiddenLayer → harden '
+            'OpenShell · live, auto-refreshing every few seconds</div>'
+            "<script>setTimeout(function(){location.reload()},2500)</script>"
+            '</div>')
     elif _job.get("error"):
         status = f'<div class="status run-error">Last run failed: {html.escape(_job["error"])}</div>'
     else:
@@ -506,9 +535,18 @@ _PAGE = """<!doctype html><html lang="en"><head><meta charset="utf-8">
   .runbar input.num { width:60px; text-align:center; }
   .ctrl.grow select { flex:1; width:100%; }
   .static { color:var(--fg); font-size:13px; }
-  .status { border-radius:10px; padding:12px 16px; margin-bottom:20px; font-size:13px; line-height:1.6; }
-  .run-active { background:rgba(52,87,213,.12); color:var(--accent); }
-  .run-error { background:rgba(179,21,59,.12); color:#e0607f; }
+  .status { border-radius:10px; padding:14px 18px; margin-bottom:20px; font-size:13px; line-height:1.55; }
+  .run-active { background:rgba(52,87,213,.10); border:1px solid rgba(52,87,213,.25); color:var(--fg); }
+  .st-row { display:flex; align-items:center; gap:9px; font-size:13px; }
+  .st-row code { font-size:12px; }
+  .spin { width:13px; height:13px; border-radius:50%; flex:none;
+    border:2px solid rgba(52,87,213,.30); border-top-color:var(--accent);
+    animation:spin .7s linear infinite; }
+  @keyframes spin { to { transform:rotate(360deg); } }
+  .st-prog { margin-top:8px; font-size:14px; font-weight:600; color:var(--accent);
+    font-variant-numeric:tabular-nums; }
+  .st-sub { margin-top:5px; font-size:11.5px; color:var(--muted); }
+  .run-error { background:rgba(179,21,59,.12); color:#e0607f; white-space:pre-wrap; }
 </style></head><body><div class="wrap">
   <h1>Crouching Dragon Hidden Tiger</h1>
   <div class="sub">{{count}} run(s) — newest first. Click a run to open its report.</div>
