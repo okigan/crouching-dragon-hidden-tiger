@@ -96,6 +96,11 @@ services:
     command: ["serve", "--host", "0.0.0.0", "--port", "8090"]
     ports:
       - "8090:8090"
+    env_file:                      # so "Run analysis" uses the real backends
+      - path: .env
+        required: false
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - ./runs:/app/runs
     restart: unless-stopped
