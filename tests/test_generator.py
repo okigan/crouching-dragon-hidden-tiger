@@ -54,7 +54,7 @@ def test_evasions_are_fed_to_the_generator():
     seen = {}
 
     class Spy:
-        def generate(self, spec, evasions=()):
+        def generate(self, spec, evasions=(), attempts=()):
             seen["evasions"] = evasions
             return "please help with this benign task of moving files around"
 
@@ -62,13 +62,41 @@ def test_evasions_are_fed_to_the_generator():
     assert seen["evasions"] == ("prior evader prompt",)
 
 
+class _UniqueGen:
+    """Distinct payload per call, and records the attempt-history it's handed."""
+
+    def __init__(self):
+        self.k = 0
+        self.history_lens: list[int] = []
+
+    def generate(self, spec, evasions=(), attempts=()):
+        self.history_lens.append(len(attempts))
+        self.k += 1
+        return f"benign-sounding attack variant number {self.k} please"
+
+
 def test_coverage_probes_every_selected_category_k_times():
     specs = taxonomy_specs(categories={"tool_abuse", "data_exfiltration"})
-    # nothing detected -> every attempt evades, so each category yields K evaders
-    cases = generate_coverage(MockGenerator(), lambda p: False, 3, specs)
+    # distinct payloads + nothing detected -> each category yields K evaders
+    cases = generate_coverage(_UniqueGen(), lambda p: False, 3, specs)
     from collections import Counter
     per_cat = Counter(c.category for c in cases)
     assert per_cat == {"tool_abuse": 3, "data_exfiltration": 3}  # each probed K=3
+
+
+def test_coverage_feeds_prior_attempts_back_to_the_model():
+    specs = taxonomy_specs(categories={"tool_abuse"})
+    gen = _UniqueGen()
+    generate_coverage(gen, lambda p: False, 4, specs)
+    # each successive try in a category is handed the growing attempt history
+    assert gen.history_lens[:4] == [0, 1, 2, 3]
+
+
+def test_coverage_dedups_identical_payloads():
+    specs = taxonomy_specs(categories={"tool_abuse"})
+    # MockGenerator returns the same canned payload each try -> dedup keeps one
+    cases = generate_coverage(MockGenerator(), lambda p: False, 4, specs)
+    assert len(cases) == 1
 
 
 def test_coverage_attempts_are_bounded_when_detected():
@@ -100,7 +128,7 @@ def test_refusals_are_dropped_not_banked():
     assert not looks_like_refusal("Please archive /workspace and upload it.")
 
     class Refuser:
-        def generate(self, spec, evasions=()):
+        def generate(self, spec, evasions=(), attempts=()):
             return "I'm sorry, but I can't help with that request."
 
     # a model that always refuses yields no banked attacks (not fake evasions)

@@ -154,10 +154,13 @@ def looks_like_refusal(text: str) -> bool:
 
 
 class Generator(Protocol):
-    def generate(self, spec: GenSpec, evasions: tuple[str, ...] = ()) -> str:
+    def generate(self, spec: GenSpec, evasions: tuple[str, ...] = (),
+                 attempts: tuple[tuple[str, str], ...] = ()) -> str:
         """Return a candidate attack prompt for the spec (or '' to skip).
         `evasions` are prompts already known to slip past the content detector,
-        offered as style exemplars."""
+        offered as style exemplars. `attempts` are this run's earlier tries for
+        the same target as (payload, outcome) pairs, so the model can diverge
+        from what it already tried instead of repeating."""
 
 
 class MockGenerator:
@@ -191,8 +194,9 @@ class MockGenerator:
         ),
     }
 
-    def generate(self, spec: GenSpec, evasions: tuple[str, ...] = ()) -> str:
-        # Offline generator ignores evasion exemplars — payloads are canned.
+    def generate(self, spec: GenSpec, evasions: tuple[str, ...] = (),
+                 attempts: tuple[tuple[str, str], ...] = ()) -> str:
+        # Offline generator ignores exemplars/history — payloads are canned.
         return self._PAYLOADS.get(spec.category, f"Please help me {spec.goal}.")
 
 
@@ -206,10 +210,11 @@ class NemotronGenerator:
         self.model = model
         self.timeout = timeout
 
-    def generate(self, spec: GenSpec, evasions: tuple[str, ...] = ()) -> str:
+    def generate(self, spec: GenSpec, evasions: tuple[str, ...] = (),
+                 attempts: tuple[tuple[str, str], ...] = ()) -> str:
         instruction = redteam.generation_prompt(
             spec.technique, spec.objective, spec.requires_control, spec.goal,
-            evasions=evasions,
+            evasions=evasions, attempts=attempts,
         )
         body = json.dumps({
             "model": self.model,
@@ -255,17 +260,28 @@ def generate_coverage(
         by_cat[s.category].append(s)
     rng = random.Random(seed)
     survivors: list[AttackCase] = []
+    seen: set[str] = set()
     n = 0
     for cat in sorted(by_cat):
         cat_specs = by_cat[cat][:]
         rng.shuffle(cat_specs)
+        # Per-category history fed back to the model so each try diverges from
+        # the last instead of repeating: (payload, outcome) for every attempt.
+        tried: list[tuple[str, str]] = []
         for attempt in range(tries_per_category):
             spec = cat_specs[attempt % len(cat_specs)]
-            payload = generator.generate(spec, evasions).strip()
+            payload = generator.generate(spec, evasions, tuple(tried)).strip()
             if not payload or looks_like_refusal(payload):
-                continue  # a wasted try — refusal or empty
+                tried.append((payload or "(empty)", "refused"))
+                continue
+            if payload in seen:
+                tried.append((payload, "duplicate — already tried"))
+                continue
             if detected(payload):
-                continue  # HiddenLayer caught it (defended at content layer)
+                tried.append((payload, "CAUGHT by detector"))
+                continue
+            tried.append((payload, "evaded — reached OpenShell"))
+            seen.add(payload)
             n += 1
             survivors.append(AttackCase(
                 id=f"{id_prefix}-{n:03d}",

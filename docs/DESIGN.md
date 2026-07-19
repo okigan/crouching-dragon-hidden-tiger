@@ -340,6 +340,13 @@ layer alongside OpenShell's capability layer, with the corpus as the adversary.
   evade the content detector (the corpus's `hl_detects=False` cases, `__main__.py`)
   as style exemplars (`redteam.generation_prompt(evasions=...)`), so new candidates
   build on what slips past HiddenLayer instead of starting cold.
+- **Per-category coverage with attempt memory (done).** Upfront generation gives the
+  red team K tries to breach *each* selected category (`generator.generate_coverage`,
+  K = `--generate`), so every checked box is exercised — not a single sample of a
+  wide pool. Within a category the model is handed its **prior tries and their
+  outcomes** (`CAUGHT` / `evaded` / `refused`, via `redteam.generation_prompt(
+  attempts=...)`) so each successive try diverges instead of repeating, and exact
+  duplicates are deduped.
 - **Adaptive per-round red team (done).** The loop now escalates: after each round
   it reseeds the generator with that round's *actual* survivors — prompts that got
   through OpenShell (landed) or through HiddenLayer (`not hl_detected`) — and adds
