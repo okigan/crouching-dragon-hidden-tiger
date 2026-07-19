@@ -10,14 +10,16 @@ reports are already rich static HTML.
 
 from __future__ import annotations
 
+import datetime
 import html
 import json
 import os
 import re
+import threading
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import HTMLResponse
+from fastapi import FastAPI, Form
+from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 RUNS_DIR = Path(os.environ.get("RUNS_DIR", "runs"))
@@ -25,6 +27,39 @@ RUNS_DIR = Path(os.environ.get("RUNS_DIR", "runs"))
 app = FastAPI(title="Crouching Dragon Hidden Tiger")
 RUNS_DIR.mkdir(exist_ok=True)
 app.mount("/runs", StaticFiles(directory=str(RUNS_DIR)), name="runs")
+
+# Single in-flight run at a time (this is a local tool, not a job queue).
+_job: dict = {"active": False, "name": None, "error": None}
+
+
+def _run_loop(name: str, generate: int, sandbox: str) -> None:
+    """Run one analysis loop in a background thread, writing to runs/<name>."""
+    try:
+        from .config import Settings
+        from .generator import generate_attacks
+        from .loop import LoopConfig, SecurityOrchestrator
+        from .policy_store import PolicyStore
+        from .reporter import Reporter
+
+        env = dict(os.environ)
+        if sandbox:
+            env["SANDBOX"] = sandbox
+        settings = Settings.from_env(env)
+        store = PolicyStore.load("policies/permissive.yaml")
+        reporter = Reporter(run_dir=RUNS_DIR / name)
+        assessor = settings.build_assessor()
+        if generate:
+            new = generate_attacks(settings.build_generator(), assessor.detect, generate)
+            assessor.add_tests(new)
+        orch = SecurityOrchestrator(
+            settings.build_sandbox(), assessor, settings.build_llm(),
+            store, reporter, LoopConfig(),
+        )
+        reporter.summarize(orch.run())
+    except Exception as exc:  # surface any failure in the UI
+        _job["error"] = f"{type(exc).__name__}: {exc}"
+    finally:
+        _job["active"] = False
 
 
 def _run_dirs() -> list[Path]:
@@ -79,17 +114,39 @@ def _card(info: dict) -> str:
     )
 
 
+@app.post("/run")
+def run(generate: int = Form(3), sandbox: str = Form("mock")):
+    """Kick off one analysis loop in the background."""
+    if not _job["active"]:
+        name = "run-" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+        _job.update(active=True, name=name, error=None)
+        threading.Thread(
+            target=_run_loop, args=(name, generate, sandbox), daemon=True
+        ).start()
+    return RedirectResponse("/", status_code=303)
+
+
 @app.get("/", response_class=HTMLResponse)
 def index() -> str:
     runs = _run_dirs()
     cards = "".join(_card(_summary(r)) for r in runs) or \
-        '<p class="empty">No runs yet — run <code>security-orchestrator run</code>.</p>'
-    return _PAGE.replace("{{cards}}", cards).replace("{{count}}", str(len(runs)))
+        '<p class="empty">No runs yet — click <b>Run analysis</b> above.</p>'
+    if _job["active"]:
+        status = (f'<div class="status run-active">⏳ Running <b>{html.escape(_job["name"] or "")}</b>'
+                  " — generating prompts, screening HiddenLayer, hardening OpenShell… "
+                  '<a href="/">refresh</a></div>')
+    elif _job.get("error"):
+        status = f'<div class="status run-error">Last run failed: {html.escape(_job["error"])}</div>'
+    else:
+        status = ""
+    return (_PAGE.replace("{{cards}}", cards)
+            .replace("{{count}}", str(len(runs)))
+            .replace("{{status}}", status))
 
 
 @app.get("/healthz")
 def healthz() -> dict:
-    return {"ok": True, "runs": len(_run_dirs())}
+    return {"ok": True, "runs": len(_run_dirs()), "running": _job["active"]}
 
 
 _PAGE = """<!doctype html><html lang="en"><head><meta charset="utf-8">
@@ -110,8 +167,29 @@ _PAGE = """<!doctype html><html lang="en"><head><meta charset="utf-8">
   .badge.ok { background:#12321f; color:#5fdd91; } .badge.warn { background:#3a2410; color:#f0a860; }
   .meta { color:var(--muted); font-size:13px; margin-top:6px; } .meta .k { color:var(--fg); font-weight:600; }
   .empty { color:var(--muted); } code { background:rgba(128,128,128,.15); padding:1px 5px; border-radius:5px; }
+  .runbar { display:flex; align-items:center; gap:10px; flex-wrap:wrap; background:var(--card);
+    border:1px solid var(--line); border-radius:12px; padding:12px 14px; margin-bottom:14px; }
+  .runbar button { background:var(--accent); color:#fff; border:0; border-radius:8px;
+    padding:8px 14px; font-weight:600; font-size:14px; cursor:pointer; }
+  .runbar label { color:var(--muted); font-size:13px; }
+  .runbar input, .runbar select { font:inherit; padding:5px 8px; border:1px solid var(--line);
+    border-radius:7px; background:var(--bg); color:var(--fg); }
+  .runbar input { width:56px; }
+  .status { border-radius:10px; padding:9px 12px; margin-bottom:14px; font-size:13px; }
+  .run-active { background:rgba(52,87,213,.12); color:var(--accent); }
+  .run-error { background:rgba(179,21,59,.12); color:#e0607f; }
 </style></head><body><div class="wrap">
   <h1>Crouching Dragon Hidden Tiger</h1>
   <div class="sub">{{count}} run(s) — newest first. Click a run to open its report.</div>
+  <form class="runbar" method="post" action="/run">
+    <button type="submit">▶ Run analysis</button>
+    <label>generate <input name="generate" type="number" value="3" min="0" max="10"></label>
+    <label>enforcement
+      <select name="sandbox">
+        <option value="mock">OpenShell (policy model · fast)</option>
+        <option value="openshell">OpenShell (real gateway · slow)</option>
+      </select></label>
+  </form>
+  {{status}}
   {{cards}}
 </div></body></html>"""
