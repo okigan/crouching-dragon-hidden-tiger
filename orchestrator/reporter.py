@@ -488,7 +488,10 @@ def _render_html(traces: list[dict], run: RunResult,
     status_txt = "CONVERGED" if converged else "STOPPED"
     status_cls = "ok" if converged else "warn"
     final_v = run.final_policy.version if run.final_policy else "—"
-    generated = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    _now = datetime.now(timezone.utc)
+    # UTC in the data; the page's JS localizes it to the viewer's timezone.
+    generated = (f'<time class="lt" datetime="{_now.isoformat()}">'
+                 f'{_now.strftime("%Y-%m-%d %H:%M UTC")}</time>')
     llm_line = f" · LLM: {run.llm_model}" if run.llm_model else ""
     enforce_badge = (
         '<span class="enf on">enforcement ON</span>' if run.enforce
@@ -721,4 +724,13 @@ def _render_html(traces: list[dict], run: RunResult,
     mappings from the live HiddenLayer prompt analyzer. OpenShell controls map to
     OpenShell's documented sandboxing surfaces.
   </div>
-</div>"""
+</div>
+<script>
+  document.querySelectorAll('time.lt').forEach(function(t){{
+    var iso=t.getAttribute('datetime'); if(!iso) return;
+    var d=new Date(iso); if(isNaN(d)) return;
+    t.textContent=d.toLocaleString([],{{year:'numeric',month:'short',day:'numeric',
+      hour:'2-digit',minute:'2-digit'}});
+    t.title=iso;
+  }});
+</script>"""
