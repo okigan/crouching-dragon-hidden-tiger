@@ -196,8 +196,14 @@ class MockGenerator:
 
     def generate(self, spec: GenSpec, evasions: tuple[str, ...] = (),
                  attempts: tuple[tuple[str, str], ...] = ()) -> str:
-        # Offline generator ignores exemplars/history — payloads are canned.
-        return self._PAYLOADS.get(spec.category, f"Please help me {spec.goal}.")
+        # Offline generator ignores exemplars/history, but varies the canned
+        # payload per technique×objective so an exhaustive sweep produces a
+        # distinct attempt per spec (a real LLM would too) instead of collapsing
+        # to one deduped payload per category.
+        base = self._PAYLOADS.get(spec.category)
+        if base is None:
+            return f"Please help me {spec.goal} (via {spec.technique})."
+        return f"{base} [{spec.technique}·{spec.objective}]"
 
 
 class NemotronGenerator:

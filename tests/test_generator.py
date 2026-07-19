@@ -94,9 +94,21 @@ def test_coverage_feeds_prior_attempts_back_to_the_model():
 
 def test_coverage_dedups_identical_payloads():
     specs = taxonomy_specs(categories={"tool_abuse"})
-    # MockGenerator returns the same canned payload each try -> dedup keeps one
-    cases = generate_coverage(MockGenerator(), lambda p: False, 4, specs)
-    assert len(cases) == 1
+
+    class Constant:  # always the same payload -> exact duplicates
+        def generate(self, spec, evasions=(), attempts=()):
+            return "the exact same benign-sounding request every single time"
+
+    cases = generate_coverage(Constant(), lambda p: False, 4, specs)
+    assert len(cases) == 1  # dedup keeps only the first
+
+
+def test_mock_generator_varies_payload_per_spec():
+    # distinct technique×objective -> distinct payloads (so sweeps don't collapse)
+    specs = taxonomy_specs(categories={"code_injection"})[:5]
+    gen = MockGenerator()
+    payloads = {gen.generate(s) for s in specs}
+    assert len(payloads) == len(specs)
 
 
 def test_full_taxonomy_sweep_attempts_every_spec_once():
