@@ -336,12 +336,23 @@ layer alongside OpenShell's capability layer, with the corpus as the adversary.
     these OpenShell **n/a** and the outcome **content-layer** rather than a red
     LANDED, so a residual success rate reflects "HiddenLayer's job, not OpenShell's"
     — not an enforcement failure.
+- **Red-team feedback (done).** The generator is also fed prompts already known to
+  evade the content detector (the corpus's `hl_detects=False` cases, `__main__.py`)
+  as style exemplars (`redteam.generation_prompt(evasions=...)`), so new candidates
+  build on what slips past HiddenLayer instead of starting cold. (Adaptive per-round
+  regeneration from each round's actual survivors is the natural next step.)
 - **Blue-team context (done).** The remediation model is shown documented OpenShell
-  controls (`remediation.CONTROL_DOCS` — what each control does, not bare keywords)
-  and the **current active policy** (`policy.controls()`), so its choice is grounded
-  rather than a blind pick. Its selection is still validated against the remediation
-  table and falls back to the deterministic heuristic, so convergence (for
-  defendable findings) never depends on the small model.
+  controls (`remediation.CONTROL_DOCS` — what each control does, not bare keywords),
+  an accurate **OpenShell enforcement primer** (`remediation.OPENSHELL_PRIMER`,
+  paraphrased from NVIDIA's
+  [security-policy](https://github.com/NVIDIA/OpenShell/blob/main/architecture/security-policy.md)
+  + [policy-schema](https://github.com/NVIDIA/OpenShell/blob/main/docs/reference/policy-schema.mdx)
+  docs), and the **current active policy** (`policy.controls()`), so its choice is
+  grounded rather than a blind pick. Its selection is still validated against the
+  remediation table and falls back to the deterministic heuristic, so convergence
+  (for defendable findings) never depends on the small model. Stretch: let the model
+  author real `network_policies` YAML (host/port/method allow-list entries) directly,
+  validated against the schema, instead of picking a templated op.
 - **Phase E — observed enforcement (egress done).** The egress dimension is now
   *observed*, not modeled: for attacks with a real `egress_host`, the assessor
   exec's a live `curl` inside the OpenShell sandbox each round and uses that

@@ -32,9 +32,17 @@ def _run(args: argparse.Namespace) -> int:
     # Dynamic red team: generate candidate attacks from APE techniques, screen
     # them against the detector, and add the evaders to the corpus.
     if args.generate:
+        from .backends.corpus import DEFAULT_CORPUS
         from .generator import generate_attacks
+        # Feed the generator prompts already known to slip past the content
+        # detector (the corpus's hl_detects=False cases) so new candidates build
+        # on styles that evade HiddenLayer rather than starting from scratch.
+        evasions = tuple(
+            c.payload for c in DEFAULT_CORPUS if not c.hl_detects
+        )[:4]
         new = generate_attacks(
-            settings.build_generator(), assessor.detect, args.generate
+            settings.build_generator(), assessor.detect, args.generate,
+            evasions=evasions,
         )
         assessor.add_tests(new)
         print(f"generated {len(new)}/{args.generate} evasion attack(s) "

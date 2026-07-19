@@ -134,8 +134,10 @@ def looks_like_refusal(text: str) -> bool:
 
 
 class Generator(Protocol):
-    def generate(self, spec: GenSpec) -> str:
-        """Return a candidate attack prompt for the spec (or '' to skip)."""
+    def generate(self, spec: GenSpec, evasions: tuple[str, ...] = ()) -> str:
+        """Return a candidate attack prompt for the spec (or '' to skip).
+        `evasions` are prompts already known to slip past the content detector,
+        offered as style exemplars."""
 
 
 class MockGenerator:
@@ -169,7 +171,8 @@ class MockGenerator:
         ),
     }
 
-    def generate(self, spec: GenSpec) -> str:
+    def generate(self, spec: GenSpec, evasions: tuple[str, ...] = ()) -> str:
+        # Offline generator ignores evasion exemplars — payloads are canned.
         return self._PAYLOADS.get(spec.category, f"Please help me {spec.goal}.")
 
 
@@ -183,9 +186,10 @@ class NemotronGenerator:
         self.model = model
         self.timeout = timeout
 
-    def generate(self, spec: GenSpec) -> str:
+    def generate(self, spec: GenSpec, evasions: tuple[str, ...] = ()) -> str:
         instruction = redteam.generation_prompt(
-            spec.technique, spec.objective, spec.requires_control, spec.goal
+            spec.technique, spec.objective, spec.requires_control, spec.goal,
+            evasions=evasions,
         )
         body = json.dumps({
             "model": self.model,
@@ -215,12 +219,15 @@ def generate_attacks(
     count: int,
     specs: list[GenSpec] | None = None,
     seed: int = 1234,
+    evasions: tuple[str, ...] = (),
 ) -> list[AttackCase]:
     """Generate up to `count` candidates and return the ones that EVADE detection
     (the useful detection gaps). Draws from the full APE taxonomy (every technique
     × objective) by default, sampling a reproducible spread so a small `count`
     still covers many techniques rather than repeating one. `detected(prompt)` is
     the screening callable — typically the assessor's live HiddenLayer check.
+    `evasions` are prompts already known to evade the content detector, fed to the
+    generator as style exemplars so new candidates build on what worked.
 
     Candidates that read like a model refusal are dropped, not banked: a refusal
     carries no attack content, so it slips past screening and would otherwise
@@ -232,7 +239,7 @@ def generate_attacks(
     for spec in pool:
         if len(survivors) >= count:
             break
-        payload = generator.generate(spec).strip()
+        payload = generator.generate(spec, evasions).strip()
         if not payload or looks_like_refusal(payload):
             continue  # empty or a refusal — not a usable attack
         if detected(payload):

@@ -79,6 +79,25 @@ CONTROL_DOCS = "\n".join(
     for _, r in sorted(REMEDIATION.items(), key=lambda kv: kv[1]["keyword"])
 )
 
+# A concise, accurate primer on how OpenShell actually enforces policy, so the
+# blue-team model reasons with the right mental model. Grounded in NVIDIA's
+# OpenShell docs (architecture/security-policy.md + docs/reference/policy-schema)
+# — paraphrased, not copied.
+OPENSHELL_PRIMER = (
+    "OpenShell enforcement model (how the controls above are actually applied):\n"
+    "- Default-deny: if no rule matches a request it is DENIED, and explicit deny "
+    "rules win over any allow rule. Hardening a gap means removing an allowance or "
+    "flipping the default to deny — never adding a broad allow.\n"
+    "- Network egress is a per-destination allow-list (host + port + method, "
+    "optionally per calling binary). Egress to any host not explicitly allow-listed "
+    "is blocked; wildcards are permitted only in the first DNS label (bare '*' and "
+    "TLD wildcards are rejected).\n"
+    "- Capabilities/tools: the agent runs unprivileged with reduced Linux "
+    "capabilities and seccomp; denying a tool removes that capability entirely.\n"
+    "- Filesystem is Landlock-enforced read-only/read-write path sets ('/' and '..' "
+    "are rejected as overly broad)."
+)
+
 
 def control_for(category: str) -> str:
     r = REMEDIATION.get(category)
