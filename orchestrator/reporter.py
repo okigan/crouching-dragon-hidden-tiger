@@ -521,7 +521,7 @@ def _render_html(traces: list[dict], run: RunResult) -> str:
   .enf {{ font-size:11px; font-weight:600; padding:1px 7px; border-radius:10px; }}
   .enf.on {{ background:#12321f; color:#5fdd91; }}
   .enf.off {{ background:#3a1418; color:#f0808f; }}
-  .delta {{ color:#2fbd6b; }}
+  .delta {{ color:#0f9d74; }}
   .summary {{ display:flex; gap:22px; flex-wrap:wrap; align-items:flex-end;
     background:var(--card); border:1px solid var(--line); border-radius:12px;
     padding:16px 18px; margin-bottom:26px; }}
@@ -534,18 +534,18 @@ def _render_html(traces: list[dict], run: RunResult) -> str:
     flex-direction:column; justify-content:flex-end; border-radius:3px;
     overflow:hidden; background:rgba(128,128,128,.10); }}
   .seg {{ width:100%; }}
-  .seg.hl {{ background:#2fbd6b; }}
-  .seg.os {{ background:var(--accent); }}
-  .seg.landed {{ background:#d5304a; }}
+  .seg.hl {{ background:#0f9d74; }}
+  .seg.os {{ background:#3b5bde; }}
+  .seg.landed {{ background:#e0576b; }}
   .scol-x {{ position:absolute; bottom:-16px; left:0; right:0; text-align:center;
     font-size:9px; color:var(--muted); }}
   .legend {{ display:flex; align-items:center; gap:10px; margin-top:14px;
     font-size:11px; color:var(--muted); }}
   .legend .lg {{ display:inline-flex; align-items:center; gap:4px; }}
   .legend .sw {{ width:9px; height:9px; border-radius:2px; display:inline-block; }}
-  .legend .sw.hl {{ background:#2fbd6b; }}
-  .legend .sw.os {{ background:var(--accent); }}
-  .legend .sw.landed {{ background:#d5304a; }}
+  .legend .sw.hl {{ background:#0f9d74; }}
+  .legend .sw.os {{ background:#3b5bde; }}
+  .legend .sw.landed {{ background:#e0576b; }}
   .legend .cap {{ margin-left:auto; font-weight:600; }}
   .evolution {{ border:1px solid var(--line); border-radius:12px; padding:14px 18px;
     margin-bottom:26px; background:var(--card); }}
@@ -557,7 +557,7 @@ def _render_html(traces: list[dict], run: RunResult) -> str:
   ol.evo li:last-child {{ border-bottom:0; }}
   .evo .ver {{ font-variant-numeric:tabular-nums; color:var(--muted);
     min-width:64px; font-weight:600; }}
-  .evo .chg {{ background:rgba(47,189,107,.12); color:#2fbd6b; padding:1px 7px;
+  .evo .chg {{ background:rgba(47,189,107,.12); color:#0f9d74; padding:1px 7px;
     border-radius:5px; font-size:12px; }}
   .evo .trig {{ color:var(--muted); }}
   .gaps {{ border:1px solid #d1660f55; border-radius:12px; padding:14px 18px;
@@ -576,20 +576,20 @@ def _render_html(traces: list[dict], run: RunResult) -> str:
   .gaparrow {{ color:#d1660f; font-weight:600; }}
   .stopby {{ font-weight:700; margin-left:auto; font-size:11px;
     padding:2px 8px; border-radius:20px; letter-spacing:.02em; }}
-  .stopby.defended {{ background:rgba(47,189,107,.15); color:#2fbd6b; }}
-  .stopby.landed {{ background:rgba(213,48,74,.16); color:#d5304a; }}
+  .stopby.defended {{ background:rgba(47,189,107,.15); color:#0f9d74; }}
+  .stopby.landed {{ background:rgba(213,48,74,.16); color:#e0576b; }}
   .gaprow code {{ font-size:11px; }}
   .bypass-col h3 {{ font-size:13px; margin:0 0 2px; }}
   .sigcount {{ font-size:11px; font-weight:600; padding:1px 7px; border-radius:9px;
     background:rgba(209,102,15,.15); color:#d1660f; }}
   .sig {{ font-size:11px; color:var(--muted); }}
   .layer {{ font-size:11px; font-weight:600; padding:1px 7px; border-radius:9px; }}
-  .layer.ok {{ background:rgba(47,189,107,.15); color:#2fbd6b; }}
+  .layer.ok {{ background:rgba(47,189,107,.15); color:#0f9d74; }}
   .layer.gap {{ background:rgba(209,102,15,.15); color:#d1660f; }}
   .obs {{ font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:.04em;
     padding:0 4px; border-radius:5px; background:var(--accent); color:#fff; vertical-align:middle; }}
   .state.landed {{ color:#b3153b; }}
-  .state.hlonly {{ color:#2fbd6b; }}
+  .state.hlonly {{ color:#0f9d74; }}
   .state.osonly {{ color:var(--accent); }}
   .evo .hl {{ margin-left:auto; font-size:11px; font-weight:600; padding:1px 8px;
     border-radius:10px; background:#3a1418; color:#f0808f; }}
@@ -600,7 +600,7 @@ def _render_html(traces: list[dict], run: RunResult) -> str:
   .open-count {{ margin-left:auto; color:var(--muted); font-size:13px; }}
   .dot {{ width:10px; height:10px; border-radius:50%; display:inline-block; }}
   .open-dot {{ background:#d1660f; }}
-  .converged-dot {{ background:#2fbd6b; }}
+  .converged-dot {{ background:#0f9d74; }}
   table.findings {{ width:100%; border-collapse:collapse; font-size:13px;
     margin-bottom:10px; }}
   .findings th {{ text-align:left; color:var(--muted); font-weight:600;
@@ -620,7 +620,7 @@ def _render_html(traces: list[dict], run: RunResult) -> str:
     font-weight:600; text-transform:uppercase; }}
   .remediation {{ border-left:3px solid var(--accent); padding:8px 12px;
     background:rgba(52,87,213,.06); border-radius:0 8px 8px 0; }}
-  .remediation.converged {{ border-color:#2fbd6b; background:rgba(47,189,107,.08);
+  .remediation.converged {{ border-color:#0f9d74; background:rgba(47,189,107,.08);
     font-weight:600; }}
   .remediation.none {{ border-color:#b8860b; background:rgba(184,134,11,.08);
     color:var(--muted); }}
