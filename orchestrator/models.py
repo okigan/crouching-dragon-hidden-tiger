@@ -268,6 +268,9 @@ class RunResult:
     final_policy: Policy | None = None
     enforce: bool = True
     success_rates: list[float] = field(default_factory=list)  # per round
+    # Which reasoning/generation LLM drove this run (for the report + web UI).
+    llm_backend: str = ""   # e.g. "nemotron" | "mock"
+    llm_model: str = ""     # e.g. "Qwen/Qwen2.5-0.5B-Instruct"
 
     @property
     def iteration_count(self) -> int:

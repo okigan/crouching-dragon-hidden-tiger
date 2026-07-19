@@ -97,6 +97,8 @@ class Reporter:
             f"- Attack-success-rate: {run.initial_success:.0%} → {run.final_success:.0%} "
             f"(delta {run.success_delta:+.0%})",
         ]
+        if run.llm_model:
+            lines.append(f"- LLM: {run.llm_backend} ({run.llm_model})")
         if run.final_policy:
             lines.append(f"- Final policy version: {run.final_policy.version}")
         lines += ["", "## Iterations", ""]
@@ -455,6 +457,8 @@ def _render_html(traces: list[dict], run: RunResult) -> str:
     status_cls = "ok" if converged else "warn"
     final_v = run.final_policy.version if run.final_policy else "—"
     generated = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    llm_line = (f" · LLM: {run.llm_backend} ({run.llm_model})"
+                if run.llm_model else "")
     enforce_badge = (
         '<span class="enf on">enforcement ON</span>' if run.enforce
         else '<span class="enf off">enforcement OFF · ablation</span>'
@@ -653,7 +657,7 @@ def _render_html(traces: list[dict], run: RunResult) -> str:
 </style>
 <div class="wrap">
   <h1>Crouching Dragon Hidden Tiger <span class="tag">Run Report</span></h1>
-  <div class="sub">Generated {generated}</div>
+  <div class="sub">Generated {generated}{llm_line}</div>
   <div class="summary">
     <div class="metric"><b><span class="status {status_cls}">{status_txt}</span></b>
       <span>{enforce_badge}</span></div>

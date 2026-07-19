@@ -36,6 +36,44 @@ app.mount("/runs", StaticFiles(directory=str(RUNS_DIR)), name="runs")
 # Single in-flight run at a time (this is a local demo tool, not a job queue).
 _job: dict = {"active": False, "name": None, "container": None, "error": None}
 
+_models_cache: dict = {"models": None}
+
+
+def _current_model() -> str:
+    return os.environ.get("NEMOTRON_MODEL", "")
+
+
+def _llm_endpoint() -> str:
+    base = os.environ.get("NEMOTRON_BASE_URL", "")
+    return base.split("://")[-1].rstrip("/") if base else ""
+
+
+def _available_models() -> list[str]:
+    """Models the configured vLLM endpoint actually serves (GET /v1/models).
+    Cached; returns [] if the endpoint is unset or unreachable."""
+    if _models_cache["models"] is not None:
+        return _models_cache["models"]
+    models: list[str] = []
+    base = os.environ.get("NEMOTRON_BASE_URL")
+    if base:
+        try:
+            import urllib.request
+            req = urllib.request.Request(
+                base.rstrip("/") + "/v1/models",
+                headers={"Authorization": f"Bearer {os.environ.get('NEMOTRON_KEY', '')}"},
+            )
+            with urllib.request.urlopen(req, timeout=5) as r:
+                data = json.load(r)
+            models = [m["id"] for m in data.get("data", []) if m.get("id")]
+        except Exception:
+            models = []
+    # Always include the configured model, even if listing failed.
+    cur = _current_model()
+    if cur and cur not in models:
+        models.insert(0, cur)
+    _models_cache["models"] = models
+    return models
+
 
 def _host_runs_dir(client, me_id: str) -> str | None:
     """Host path backing our /app/runs bind mount. A run executes as a *sibling*
@@ -48,7 +86,7 @@ def _host_runs_dir(client, me_id: str) -> str | None:
     return None
 
 
-def _launch(name: str, generate: int) -> None:
+def _launch(name: str, generate: int, model: str = "") -> None:
     """Run one analysis as a *visible sibling container* (cdht-<name>).
 
     The container appears in `docker ps` while the loop runs, writes its report
@@ -68,6 +106,8 @@ def _launch(name: str, generate: int) -> None:
                 "through the docker stack (make stack-up), not a bare process")
         env = {k: v for k, v in os.environ.items()
                if any(k.startswith(p) for p in _ENV_PREFIXES)}
+        if model:  # per-run LLM override picked in the UI
+            env["NEMOTRON_MODEL"] = model
         container = client.containers.run(
             ORCH_IMAGE,
             command=["run", "--generate", str(generate),
@@ -122,6 +162,22 @@ def _run_dirs() -> list[Path]:
     return sorted(dirs, key=lambda d: d.stat().st_mtime, reverse=True)
 
 
+def _format_when(iso: str | None, run_name: str) -> str:
+    """Human timestamp for a run: the report's Generated time (UTC), falling back
+    to the run-<YYYYMMDD-HHMMSS> directory name."""
+    if iso:
+        try:
+            dt = datetime.datetime.fromisoformat(iso)
+            return dt.strftime("%Y-%m-%d %H:%M UTC")
+        except ValueError:
+            pass
+    m = re.match(r"run-(\d{8})-(\d{6})", run_name)
+    if m:
+        d, t = m.group(1), m.group(2)
+        return f"{d[:4]}-{d[4:6]}-{d[6:]} {t[:2]}:{t[2:4]}"
+    return ""
+
+
 def _summary(run: Path) -> dict:
     """Pull a few headline fields from the run's summary.md + attacks.json."""
     info: dict = {"name": run.name}
@@ -129,10 +185,13 @@ def _summary(run: Path) -> dict:
     for key, label in [("Converged", "converged"),
                        ("Attack-success-rate", "success"),
                        ("Iterations", "rounds"),
-                       ("Enforcement", "enforcement")]:
+                       ("Enforcement", "enforcement"),
+                       ("Generated", "when"),
+                       ("LLM", "llm")]:
         m = re.search(rf"- {key}:\s*(.+)", text)
         if m:
             info[label] = m.group(1).strip()
+    info["when"] = _format_when(info.get("when"), run.name)
     attacks_f = run / "attacks.json"
     if attacks_f.exists():
         try:
@@ -161,10 +220,18 @@ def _card(info: dict) -> str:
     meta = " · ".join(bits)
     log_link = (f' · <a class="sub-link" href="/log/{n}">log</a>'
                 if info.get("has_log") else "")
+    sub_bits = []
+    if info.get("when"):
+        sub_bits.append(f'🕐 {html.escape(info["when"])}')
+    if info.get("llm"):
+        sub_bits.append(f'🧠 {html.escape(info["llm"])}')
+    subline = (f'<div class="run-sub">{" · ".join(sub_bits)}</div>'
+               if sub_bits else "")
     return (
         f'<div class="run">'
         f'<div class="run-head"><span class="badge {badge}">{html.escape(conv)}</span>'
         f'<a class="run-title" href="/runs/{n}/report.html"><b>{n}</b></a></div>'
+        f'{subline}'
         f'<div class="meta">{meta}</div>'
         f'<div class="links"><a href="/runs/{n}/report.html">report</a>{log_link}</div>'
         f'</div>'
@@ -172,13 +239,13 @@ def _card(info: dict) -> str:
 
 
 @app.post("/run")
-def run(generate: int = Form(3)):
+def run(generate: int = Form(3), model: str = Form("")):
     """Launch one analysis run as a visible sibling container (real backends)."""
     if not _job["active"]:
         name = "run-" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
         _job.update(active=True, name=name, container=None, error=None)
         threading.Thread(
-            target=_launch, args=(name, generate), daemon=True
+            target=_launch, args=(name, generate, model), daemon=True
         ).start()
     return RedirectResponse("/", status_code=303)
 
@@ -200,7 +267,29 @@ def index() -> str:
         status = ""
     return (_PAGE.replace("{{cards}}", cards)
             .replace("{{count}}", str(len(runs)))
-            .replace("{{status}}", status))
+            .replace("{{status}}", status)
+            .replace("{{llm}}", _llm_control()))
+
+
+def _llm_control() -> str:
+    """The LLM selector for the run bar: a dropdown of the models the endpoint
+    serves (current one selected), or plain text if only one/none is known."""
+    cur = _current_model()
+    endpoint = _llm_endpoint()
+    models = _available_models()
+    ep = f' <span class="hint">@ {html.escape(endpoint)}</span>' if endpoint else ""
+    if len(models) > 1:
+        opts = "".join(
+            f'<option value="{html.escape(m)}"{" selected" if m == cur else ""}>'
+            f'{html.escape(m)}</option>' for m in models
+        )
+        return (f'<label title="LLM used to generate attacks and reason about '
+                f'fixes">🧠 LLM <select name="model">{opts}</select></label>{ep}')
+    # single or unknown model → show it, no dropdown (still submit it)
+    shown = html.escape(cur or "default")
+    return (f'<label>🧠 LLM <input name="model" value="{html.escape(cur)}" '
+            f'class="llm-static" readonly></label>{ep}' if cur
+            else f'<span class="hint">🧠 LLM: {shown}</span>')
 
 
 @app.get("/log/{name}", response_class=PlainTextResponse)
@@ -237,6 +326,8 @@ _PAGE = """<!doctype html><html lang="en"><head><meta charset="utf-8">
   .links a, .sub-link { color:var(--accent); text-decoration:none; }
   .links a:hover { text-decoration:underline; }
   .run-head { display:flex; align-items:center; gap:10px; }
+  .run-sub { color:var(--muted); font-size:12px; margin-top:5px; display:flex;
+    gap:12px; flex-wrap:wrap; }
   .badge { font-size:11px; font-weight:700; padding:2px 8px; border-radius:20px; text-transform:uppercase; }
   .badge.ok { background:#12321f; color:#5fdd91; } .badge.warn { background:#3a2410; color:#f0a860; }
   .meta { color:var(--muted); font-size:13px; margin-top:6px; } .meta .k { color:var(--fg); font-weight:600; }
@@ -248,8 +339,9 @@ _PAGE = """<!doctype html><html lang="en"><head><meta charset="utf-8">
   .runbar label { color:var(--muted); font-size:13px; }
   .runbar input, .runbar select { font:inherit; padding:5px 8px; border:1px solid var(--line);
     border-radius:7px; background:var(--bg); color:var(--fg); }
-  .runbar input { width:56px; }
-  .runbar .hint { color:var(--muted); font-size:12px; margin-left:auto; }
+  .runbar input.num { width:56px; }
+  .runbar select, .runbar .llm-static { max-width:230px; }
+  .runbar .hint { color:var(--muted); font-size:12px; }
   .status { border-radius:10px; padding:9px 12px; margin-bottom:14px; font-size:13px; }
   .run-active { background:rgba(52,87,213,.12); color:var(--accent); }
   .run-error { background:rgba(179,21,59,.12); color:#e0607f; }
@@ -260,8 +352,8 @@ _PAGE = """<!doctype html><html lang="en"><head><meta charset="utf-8">
     <button type="submit">▶ Run analysis</button>
     <label title="How many new attack prompts the vLLM should craft and screen this run (0 = corpus only)">
       new AI attacks to generate
-      <input name="generate" type="number" value="3" min="0" max="10"></label>
-    <span class="hint">real backends: cloud vLLM · HiddenLayer · OpenShell gateway</span>
+      <input class="num" name="generate" type="number" value="3" min="0" max="10"></label>
+    {{llm}}
   </form>
   {{status}}
   {{cards}}
