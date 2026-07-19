@@ -15,7 +15,8 @@ ablate:
 	uv run security-orchestrator ablate --out runs/ablation
 
 taxonomy-sweep:      ## exercise EVERY ape.json spec once (offline mock, instant)
-	SANDBOX=mock ASSESSOR=mock LLM=mock uv run security-orchestrator run \
+	@# a 1-iteration coverage sweep isn't meant to converge (exit 1) — that's fine
+	-SANDBOX=mock ASSESSOR=mock LLM=mock uv run security-orchestrator run \
 	  --generate 1 --full-taxonomy --max-iters 1 --out runs/taxonomy-sweep
 	@echo "→ open runs/taxonomy-sweep/report.html (see the generation panel)"
 
