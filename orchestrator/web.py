@@ -371,7 +371,7 @@ def _llm_control() -> str:
     models = sorted(idx.keys())
     if not models:
         shown = html.escape(cur or "default")
-        return ('<div class="field"><span class="flabel">🧠 model</span>'
+        return ('<div class="ctrl grow"><span class="clab">🧠 model</span>'
                 f'<span class="static">{shown}</span></div>')
     opts = []
     for m in models:
@@ -379,7 +379,7 @@ def _llm_control() -> str:
         tag = f' · {html.escape(prov.get("label", ""))}' if prov.get("label") else ""
         sel = " selected" if m == cur else ""
         opts.append(f'<option value="{html.escape(m)}"{sel}>{html.escape(m)}{tag}</option>')
-    return ('<div class="field"><span class="flabel" title="LLM used to generate '
+    return ('<div class="ctrl grow"><span class="clab" title="LLM used to generate '
             'attacks and reason about fixes">🧠 model</span>'
             f'<select name="model">{"".join(opts)}</select></div>')
 
@@ -452,21 +452,21 @@ _PAGE = """<!doctype html><html lang="en"><head><meta charset="utf-8">
   .ms { width:100%; display:block; }
   .ms.hl { background:#2fbd6b; } .ms.os { background:#3457d5; } .ms.landed { background:#d5304a; }
   .empty { color:var(--muted); } code { background:rgba(128,128,128,.15); padding:1px 5px; border-radius:5px; }
-  .runbar { display:flex; align-items:flex-end; gap:24px; flex-wrap:wrap; background:var(--card);
-    border:1px solid var(--line); border-radius:14px; padding:20px 24px; margin-bottom:20px; }
+  .runbar { display:flex; align-items:center; gap:16px; flex-wrap:wrap; background:var(--card);
+    border:1px solid var(--line); border-radius:14px; padding:16px 20px; margin-bottom:20px; }
   .runbar button { background:var(--accent); color:#fff; border:0; border-radius:9px;
-    padding:10px 18px; font-weight:600; font-size:14px; cursor:pointer; align-self:flex-end;
+    padding:11px 20px; font-weight:600; font-size:14px; cursor:pointer; white-space:nowrap;
     box-shadow:0 1px 3px rgba(52,87,213,.3); }
   .runbar button:hover { filter:brightness(1.06); }
-  .field { display:flex; flex-direction:column; gap:5px; }
-  .field .flabel { color:var(--muted); font-size:11px; font-weight:600;
-    text-transform:uppercase; letter-spacing:.03em; }
-  .field input, .field select { font:inherit; padding:7px 9px; border:1px solid var(--line);
-    border-radius:8px; background:var(--bg); color:var(--fg); }
-  .field input:focus, .field select:focus { outline:none; border-color:var(--accent); }
-  .field input.num { width:64px; }
-  .field select { max-width:340px; }
-  .field .static { padding:7px 9px; color:var(--fg); font-size:13px; }
+  .ctrl { display:flex; align-items:center; gap:9px; }
+  .ctrl.grow { flex:1; min-width:260px; }
+  .clab { color:var(--muted); font-size:12px; font-weight:600; white-space:nowrap; }
+  .runbar input, .runbar select { font:inherit; padding:9px 11px; border:1px solid var(--line);
+    border-radius:8px; background:var(--bg); color:var(--fg); height:40px; }
+  .runbar input:focus, .runbar select:focus { outline:none; border-color:var(--accent); }
+  .runbar input.num { width:60px; text-align:center; }
+  .ctrl.grow select { flex:1; width:100%; }
+  .static { color:var(--fg); font-size:13px; }
   .status { border-radius:10px; padding:12px 16px; margin-bottom:20px; font-size:13px; line-height:1.6; }
   .run-active { background:rgba(52,87,213,.12); color:var(--accent); }
   .run-error { background:rgba(179,21,59,.12); color:#e0607f; }
@@ -475,9 +475,9 @@ _PAGE = """<!doctype html><html lang="en"><head><meta charset="utf-8">
   <div class="sub">{{count}} run(s) — newest first. Click a run to open its report.</div>
   <form class="runbar" method="post" action="/run">
     <button type="submit">▶ Run analysis</button>
-    <div class="field">
-      <span class="flabel" title="How many new attack prompts the LLM crafts and screens this run (0 = corpus only)">new AI attacks</span>
+    <div class="ctrl">
       <input class="num" name="generate" type="number" value="3" min="0" max="10">
+      <span class="clab" title="How many new attack prompts the LLM crafts and screens this run (0 = corpus only)">new attacks</span>
     </div>
     {{llm}}
   </form>
