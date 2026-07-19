@@ -21,7 +21,12 @@ def _run(args: argparse.Namespace) -> int:
     enforce = args.enforce if args.enforce is not None else settings.enforce
     store = PolicyStore.load(args.policy)
     reporter = Reporter(run_dir=args.out)
+    sandbox = settings.build_sandbox()
     assessor = settings.build_assessor()
+    # Observed enforcement: if the sandbox can probe egress and the assessor can
+    # use it, wire them so egress attacks are tested live instead of modeled.
+    if hasattr(sandbox, "egress_probe") and hasattr(assessor, "set_prober"):
+        assessor.set_prober(sandbox.egress_probe)
 
     # Dynamic red team: generate candidate attacks from APE techniques, screen
     # them against the detector, and add the evaders to the corpus.
@@ -36,7 +41,7 @@ def _run(args: argparse.Namespace) -> int:
               f"{', '.join(c.id for c in new) or 'none'}")
 
     orch = SecurityOrchestrator(
-        sandbox=settings.build_sandbox(),
+        sandbox=sandbox,
         assessor=assessor,
         llm=settings.build_llm(),
         store=store,

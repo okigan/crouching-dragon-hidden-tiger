@@ -24,6 +24,10 @@ REMEDIATION: dict[str, dict] = {
         "op": {"op": "set_default", "path": "network.default", "value": "deny"},
         "control": "network.default_deny",
         "root_cause": "Egress is default-allow, permitting data exfiltration.",
+        # Also drop the finding's exfil host from the egress allow-list — with a
+        # live OpenShell sandbox this is what actually denies the observed egress
+        # (deny-by-default alone leaves a whitelisted host reachable).
+        "remove_egress_host": True,
     },
     "tool_abuse": {
         "keyword": "deny_shell_exec",
@@ -86,8 +90,14 @@ def build_recommendation(
             latency_ms=latency_ms,
             llm_narrative=narrative,
         )
+    ops = [dict(remedy["op"])]
+    # For egress findings, also remove the whitelisted exfil host so a live
+    # OpenShell sandbox truly denies it (observed: reachable -> 403 next round).
+    if remedy.get("remove_egress_host") and target.egress_host:
+        ops.append({"op": "allow_remove", "path": "network.allow",
+                    "value": target.egress_host})
     patch = PolicyPatch(
-        ops=[dict(remedy["op"])],
+        ops=ops,
         rationale=remedy["root_cause"],
         addresses=frozenset({target.id}),
     )
@@ -102,6 +112,8 @@ def build_recommendation(
         # Carry over the detection outcome: a landed finding evaded HiddenLayer,
         # so its regression guard is also an evasion case OpenShell must hold.
         hl_detects=target.hl_detected,
+        # Keep probing the same real host so the regression is observed too.
+        egress_host=target.egress_host,
     )
     return Recommendation(
         root_cause=narrative or remedy["root_cause"],

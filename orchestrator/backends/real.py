@@ -95,6 +95,27 @@ class OpenShellSandbox:
     def teardown(self, handle: str) -> None:
         self._cli("sandbox", "delete", handle)
 
+    def egress_probe(self, handle: str, host: str,
+                     timeout: float = 30.0) -> tuple[bool, str]:
+        """OBSERVE OpenShell egress enforcement: try to reach ``host`` from inside
+        the live sandbox and report whether OpenShell allowed it.
+
+        Returns ``(blocked, note)``. curl exits 0 only when the request actually
+        left the sandbox (the exfil landed); OpenShell denies a non-allow-listed
+        host at its proxy (HTTP 403 / exit 56), so a non-zero exit == blocked.
+        """
+        url = host if host.startswith("http") else f"https://{host}/"
+        code, out = self.exec(
+            handle,
+            ["curl", "-sS", "-o", "/dev/null", "-w", "%{http_code}",
+             "--max-time", "10", url],
+            timeout=timeout,
+        )
+        detail = " ".join(out.split())[:100]
+        if code == 0:
+            return False, f"egress to {host} SUCCEEDED (HTTP {detail}) — OpenShell allowed it"
+        return True, f"egress to {host} DENIED by OpenShell (exit {code}: {detail})"
+
 
 class HiddenLayerAssessor:
     """HiddenLayer Runtime Security as the red team.
@@ -142,6 +163,14 @@ class HiddenLayerAssessor:
         )
         self._client = None  # lazy: constructed on first assess()
         self._cache: dict[str, dict] = {}
+        # Optional real-execution probe: (handle, host) -> (blocked, note). When
+        # set (a live OpenShell sandbox), egress attacks are OBSERVED, not modeled.
+        self._prober = None
+
+    def set_prober(self, prober) -> None:
+        """Inject a live egress probe (e.g. OpenShellSandbox.egress_probe) so the
+        capability layer is observed for attacks that name a real egress_host."""
+        self._prober = prober
 
     def _get_client(self):
         if self._client is None:
@@ -202,8 +231,14 @@ class HiddenLayerAssessor:
             else:
                 hl_note = "0 signals — bypassed HiddenLayer"
                 refs = refs_for_category(case.category)
+            # OBSERVE OpenShell enforcement for egress attacks when a live probe
+            # is wired; otherwise fall back to the modeled control inference.
+            observed = None
+            if self._prober is not None and case.egress_host:
+                observed = self._prober(handle, case.egress_host)
             findings.append(
-                evaluate(case, hl_detected, hl_note, policy, refs, hl_signals=signals)
+                evaluate(case, hl_detected, hl_note, policy, refs,
+                         hl_signals=signals, observed=observed)
             )
         return Assessment(findings=findings)
 

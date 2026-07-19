@@ -22,14 +22,22 @@ def evaluate(
     policy: Policy,
     references: tuple[DocRef, ...],
     hl_signals: tuple[str, ...] = (),
+    observed: tuple[bool, str] | None = None,
 ) -> Finding:
-    blocked = case.requires_control in policy.controls()
-    resolved = hl_detected or blocked
+    """Build a Finding for one attack under one policy.
 
-    if blocked:
-        os_note = f"blocked by OpenShell ({case.requires_control})"
+    ``observed`` — when provided, ``(blocked, note)`` is the REAL OpenShell
+    verdict obtained by exec'ing the attack's egress inside the live sandbox. It
+    replaces the modeled ``requires_control in policy.controls()`` inference for
+    this attack and is flagged as observed in the report (DESIGN §9).
+    """
+    if observed is not None:
+        blocked, os_note = observed
     else:
-        os_note = f"OpenShell gap — needs {case.requires_control}"
+        blocked = case.requires_control in policy.controls()
+        os_note = (f"blocked by OpenShell ({case.requires_control})" if blocked
+                   else f"OpenShell gap — needs {case.requires_control}")
+    resolved = hl_detected or blocked
 
     if not resolved:
         status = "LANDED — evaded HiddenLayer and OpenShell"
@@ -55,4 +63,6 @@ def evaluate(
         hl_detected=hl_detected,
         openshell_blocked=blocked,
         hl_signals=tuple(hl_signals),
+        openshell_observed=observed is not None,
+        egress_host=case.egress_host,
     )

@@ -64,6 +64,8 @@ class Reporter:
                     "resolved": f.resolved,
                     "hl_detected": f.hl_detected,
                     "openshell_blocked": f.openshell_blocked,
+                    "openshell_observed": f.openshell_observed,
+                    "egress_host": f.egress_host,
                     "hl_signals": list(f.hl_signals),
                     "evidence": f.evidence,
                     "references": [
@@ -293,9 +295,12 @@ def _bypass_analysis(traces: list[dict]) -> str:
             if hl_det else
             '<span class="layer gap">HiddenLayer: bypassed (0 signals)</span>'
         )
+        obs = (' <span class="obs" title="observed live: real curl exec\'d '
+               'inside the OpenShell sandbox">observed</span>'
+               if f.get("openshell_observed") else "")
         os_cell = (
-            f'<span class="layer ok">OpenShell: <code>{html.escape(fix.get(f["id"], "blocked"))}</code></span>'
-            if os_blk else '<span class="layer gap">OpenShell: bypassed</span>'
+            f'<span class="layer ok">OpenShell: <code>{html.escape(fix.get(f["id"], "blocked"))}</code>{obs}</span>'
+            if os_blk else f'<span class="layer gap">OpenShell: bypassed{obs}</span>'
         )
         stopped = ("OpenShell" if os_blk and not hl_det
                    else "HiddenLayer" if hl_det and not os_blk
@@ -336,9 +341,11 @@ def _iteration_card(trace: dict) -> str:
             if hl_detected
             else '<span class="layer gap" title="no signals">0 signals</span>'
         )
+        obs = (' <span class="obs" title="observed live inside the OpenShell '
+               'sandbox">obs</span>' if f.get("openshell_observed") else "")
         os_cell = (
-            '<span class="layer ok">blocked</span>' if os_blocked
-            else '<span class="layer gap">open</span>'
+            f'<span class="layer ok">blocked{obs}</span>' if os_blocked
+            else f'<span class="layer gap">open{obs}</span>'
         )
         if not f["resolved"]:
             outcome = '<span class="state landed">LANDED</span>'
@@ -540,6 +547,8 @@ def _render_html(traces: list[dict], run: RunResult) -> str:
   .layer {{ font-size:11px; font-weight:600; padding:1px 7px; border-radius:9px; }}
   .layer.ok {{ background:rgba(47,189,107,.15); color:#2fbd6b; }}
   .layer.gap {{ background:rgba(209,102,15,.15); color:#d1660f; }}
+  .obs {{ font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:.04em;
+    padding:0 4px; border-radius:5px; background:var(--accent); color:#fff; vertical-align:middle; }}
   .state.landed {{ color:#b3153b; }}
   .state.hlonly {{ color:#2fbd6b; }}
   .state.osonly {{ color:var(--accent); }}
