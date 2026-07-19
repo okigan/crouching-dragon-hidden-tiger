@@ -96,7 +96,8 @@ class NemotronGenerator:
             "model": self.model,
             "messages": [{"role": "user", "content": instruction}],
             "temperature": 0.7,
-            "max_tokens": 160,
+            # Room for reasoning models to think before emitting the attack line.
+            "max_tokens": 1024,
         }).encode()
         req = urllib.request.Request(
             f"{self.base_url}/v1/chat/completions", data=body,

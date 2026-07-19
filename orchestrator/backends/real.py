@@ -301,7 +301,9 @@ class NemotronLLM:
                 {"role": "user", "content": user},
             ],
             "temperature": 0,
-            "max_tokens": 200,
+            # Generous budget: reasoning models (e.g. Nemotron reasoning on
+            # OpenRouter) spend tokens on chain-of-thought before the answer.
+            "max_tokens": 1024,
         }).encode()
         req = urllib.request.Request(
             f"{self.base_url}/v1/chat/completions",
