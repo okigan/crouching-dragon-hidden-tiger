@@ -4,7 +4,9 @@ from orchestrator.generator import (
     DEFAULT_SPECS,
     MockGenerator,
     generate_attacks,
+    generate_coverage,
     looks_like_refusal,
+    taxonomy_specs,
 )
 
 
@@ -58,6 +60,22 @@ def test_evasions_are_fed_to_the_generator():
 
     generate_attacks(Spy(), lambda p: False, 1, evasions=("prior evader prompt",))
     assert seen["evasions"] == ("prior evader prompt",)
+
+
+def test_coverage_probes_every_selected_category_k_times():
+    specs = taxonomy_specs(categories={"tool_abuse", "data_exfiltration"})
+    # nothing detected -> every attempt evades, so each category yields K evaders
+    cases = generate_coverage(MockGenerator(), lambda p: False, 3, specs)
+    from collections import Counter
+    per_cat = Counter(c.category for c in cases)
+    assert per_cat == {"tool_abuse": 3, "data_exfiltration": 3}  # each probed K=3
+
+
+def test_coverage_attempts_are_bounded_when_detected():
+    specs = taxonomy_specs(categories={"tool_abuse"})
+    # everything caught at the content layer -> K tries, 0 banked (all defended)
+    cases = generate_coverage(MockGenerator(), lambda p: True, 4, specs)
+    assert cases == []
 
 
 def test_taxonomy_filters_by_tactic_and_category():
