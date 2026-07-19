@@ -32,8 +32,12 @@ app.mount("/runs", StaticFiles(directory=str(RUNS_DIR)), name="runs")
 _job: dict = {"active": False, "name": None, "error": None}
 
 
-def _run_loop(name: str, generate: int, sandbox: str) -> None:
-    """Run one analysis loop in a background thread, writing to runs/<name>."""
+def _run_loop(name: str, generate: int) -> None:
+    """Run one analysis loop in a background thread, writing to runs/<name>.
+
+    Always drives the real backends configured in .env (SANDBOX=openshell);
+    the mock sandbox exists only for the test suite, never the web UI.
+    """
     try:
         from .config import Settings
         from .generator import generate_attacks
@@ -41,10 +45,7 @@ def _run_loop(name: str, generate: int, sandbox: str) -> None:
         from .policy_store import PolicyStore
         from .reporter import Reporter
 
-        env = dict(os.environ)
-        if sandbox:
-            env["SANDBOX"] = sandbox
-        settings = Settings.from_env(env)
+        settings = Settings.from_env(dict(os.environ))
         store = PolicyStore.load("policies/permissive.yaml")
         reporter = Reporter(run_dir=RUNS_DIR / name)
         assessor = settings.build_assessor()
@@ -115,13 +116,13 @@ def _card(info: dict) -> str:
 
 
 @app.post("/run")
-def run(generate: int = Form(3), sandbox: str = Form("mock")):
-    """Kick off one analysis loop in the background."""
+def run(generate: int = Form(3)):
+    """Kick off one analysis loop in the background (real backends via .env)."""
     if not _job["active"]:
         name = "run-" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
         _job.update(active=True, name=name, error=None)
         threading.Thread(
-            target=_run_loop, args=(name, generate, sandbox), daemon=True
+            target=_run_loop, args=(name, generate), daemon=True
         ).start()
     return RedirectResponse("/", status_code=303)
 
@@ -175,6 +176,7 @@ _PAGE = """<!doctype html><html lang="en"><head><meta charset="utf-8">
   .runbar input, .runbar select { font:inherit; padding:5px 8px; border:1px solid var(--line);
     border-radius:7px; background:var(--bg); color:var(--fg); }
   .runbar input { width:56px; }
+  .runbar .hint { color:var(--muted); font-size:12px; margin-left:auto; }
   .status { border-radius:10px; padding:9px 12px; margin-bottom:14px; font-size:13px; }
   .run-active { background:rgba(52,87,213,.12); color:var(--accent); }
   .run-error { background:rgba(179,21,59,.12); color:#e0607f; }
@@ -184,11 +186,7 @@ _PAGE = """<!doctype html><html lang="en"><head><meta charset="utf-8">
   <form class="runbar" method="post" action="/run">
     <button type="submit">▶ Run analysis</button>
     <label>generate <input name="generate" type="number" value="3" min="0" max="10"></label>
-    <label>enforcement
-      <select name="sandbox">
-        <option value="mock">OpenShell (policy model · fast)</option>
-        <option value="openshell">OpenShell (real gateway · slow)</option>
-      </select></label>
+    <span class="hint">real backends: cloud vLLM · HiddenLayer · OpenShell gateway</span>
   </form>
   {{status}}
   {{cards}}
