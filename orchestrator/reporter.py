@@ -456,20 +456,34 @@ def _render_html(traces: list[dict], run: RunResult) -> str:
         else '<span class="enf off">enforcement OFF · ablation</span>'
     )
 
-    # attack-success-rate curve per round (the headline metric)
-    rates = [t.get("success_rate", 0.0) for t in traces]
-    bars = "".join(
-        f'<div class="bar" style="height:{r * 100:.0f}%" '
-        f'title="round {idx}: {r:.0%} of attacks land"></div>'
-        for idx, r in enumerate(rates)
-    )
-    # defense-in-depth split: which layer stopped each attack (final state)
+    # "% defended per round", stacked by which layer caught each attack (higher
+    # is better). HiddenLayer (content) catches some; OpenShell (capability)
+    # catches what HiddenLayer missed; the rest LANDED. The three sum to 100%.
+    bars = []
+    for idx, t in enumerate(traces):
+        fs = t["findings"]
+        n = len(fs) or 1
+        hl = sum(1 for f in fs if f.get("hl_detected"))
+        os_ = sum(1 for f in fs if f.get("openshell_blocked") and not f.get("hl_detected"))
+        landed = sum(1 for f in fs if not f.get("resolved"))
+        defended = round((hl + os_) / n * 100)
+        bars.append(
+            f'<div class="scol" title="round {idx}: {defended}% defended '
+            f'({hl} HiddenLayer, {os_} OpenShell, {landed} landed of {len(fs)})">'
+            f'<div class="seg landed" style="height:{landed / n * 100:.1f}%"></div>'
+            f'<div class="seg os" style="height:{os_ / n * 100:.1f}%"></div>'
+            f'<div class="seg hl" style="height:{hl / n * 100:.1f}%"></div>'
+            f'<div class="scol-x">{idx}</div></div>'
+        )
+    bars = "".join(bars)
+    # defense-in-depth split (final round): which layer stopped each attack
     final = traces[-1]["findings"] if traces else []
     base_final = [f for f in final if not f["id"].startswith("REG-")]
     os_stops = sum(1 for f in base_final
                    if f.get("openshell_blocked") and not f.get("hl_detected"))
-    hl_stops = sum(1 for f in base_final
-                   if f.get("hl_detected") and not f.get("openshell_blocked"))
+    hl_stops = sum(1 for f in base_final if f.get("hl_detected"))
+    initial_def = 1 - run.initial_success
+    final_def = 1 - run.final_success
 
     return f"""<title>Crouching Dragon Hidden Tiger — Run Report</title>
 <style>
@@ -507,10 +521,25 @@ def _render_html(traces: list[dict], run: RunResult) -> str:
   .metric {{ display:flex; flex-direction:column; }}
   .metric b {{ font-size:20px; }}
   .metric span {{ color:var(--muted); font-size:12px; }}
-  .trend {{ margin-left:auto; display:flex; align-items:flex-end; gap:4px;
-    height:48px; }}
-  .trend .bar {{ width:14px; background:var(--accent); border-radius:3px 3px 0 0;
-    min-height:3px; opacity:.85; }}
+  .chart {{ margin-left:auto; display:flex; flex-direction:column; gap:6px; }}
+  .trend {{ display:flex; align-items:flex-end; gap:5px; height:60px; }}
+  .scol {{ position:relative; width:16px; height:100%; display:flex;
+    flex-direction:column; justify-content:flex-end; border-radius:3px;
+    overflow:hidden; background:rgba(128,128,128,.10); }}
+  .seg {{ width:100%; }}
+  .seg.hl {{ background:#2fbd6b; }}
+  .seg.os {{ background:var(--accent); }}
+  .seg.landed {{ background:rgba(179,21,59,.28); }}
+  .scol-x {{ position:absolute; bottom:-16px; left:0; right:0; text-align:center;
+    font-size:9px; color:var(--muted); }}
+  .legend {{ display:flex; align-items:center; gap:10px; margin-top:14px;
+    font-size:11px; color:var(--muted); }}
+  .legend .lg {{ display:inline-flex; align-items:center; gap:4px; }}
+  .legend .sw {{ width:9px; height:9px; border-radius:2px; display:inline-block; }}
+  .legend .sw.hl {{ background:#2fbd6b; }}
+  .legend .sw.os {{ background:var(--accent); }}
+  .legend .sw.landed {{ background:rgba(179,21,59,.28); }}
+  .legend .cap {{ margin-left:auto; font-weight:600; }}
   .evolution {{ border:1px solid var(--line); border-radius:12px; padding:14px 18px;
     margin-bottom:26px; background:var(--card); }}
   .evolution h2 {{ font-size:15px; margin:0 0 2px; }}
@@ -621,13 +650,21 @@ def _render_html(traces: list[dict], run: RunResult) -> str:
   <div class="summary">
     <div class="metric"><b><span class="status {status_cls}">{status_txt}</span></b>
       <span>{enforce_badge}</span></div>
-    <div class="metric"><b>{run.initial_success:.0%} → {run.final_success:.0%}</b>
-      <span>attack-success-rate</span></div>
-    <div class="metric"><b>{os_stops} / {hl_stops}</b>
-      <span>stopped by OpenShell / HiddenLayer</span></div>
+    <div class="metric"><b>{initial_def:.0%} → {final_def:.0%}</b>
+      <span>attacks defended</span></div>
+    <div class="metric"><b>{hl_stops} / {os_stops}</b>
+      <span>caught by HiddenLayer / OpenShell</span></div>
     <div class="metric"><b>{run.iteration_count}</b><span>rounds</span></div>
     <div class="metric"><b>v{final_v}</b><span>final policy</span></div>
-    <div class="trend" title="attack-success-rate per round">{bars}</div>
+    <div class="chart">
+      <div class="trend">{bars}</div>
+      <div class="legend">
+        <span class="lg"><i class="sw hl"></i>HiddenLayer</span>
+        <span class="lg"><i class="sw os"></i>OpenShell</span>
+        <span class="lg"><i class="sw landed"></i>landed</span>
+        <span class="cap">% defended per round ↑</span>
+      </div>
+    </div>
   </div>
   {gaps}
   {evolution}

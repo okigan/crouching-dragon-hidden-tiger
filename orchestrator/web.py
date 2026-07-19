@@ -258,7 +258,9 @@ _PAGE = """<!doctype html><html lang="en"><head><meta charset="utf-8">
   <div class="sub">{{count}} run(s) — newest first. Click a run to open its report.</div>
   <form class="runbar" method="post" action="/run">
     <button type="submit">▶ Run analysis</button>
-    <label>generate <input name="generate" type="number" value="3" min="0" max="10"></label>
+    <label title="How many new attack prompts the vLLM should craft and screen this run (0 = corpus only)">
+      new AI attacks to generate
+      <input name="generate" type="number" value="3" min="0" max="10"></label>
     <span class="hint">real backends: cloud vLLM · HiddenLayer · OpenShell gateway</span>
   </form>
   {{status}}
