@@ -486,16 +486,29 @@ def _ape_filter() -> str:
     return (
         '<div class="apefilter">'
         '<div class="apehead"><b>🎯 APE coverage</b>'
-        '<span class="hint">all selected — uncheck to narrow which attacks '
-        'this run generates</span></div>'
+        '<span class="hint">the red team gets <b id="est-k">2</b> tries to breach '
+        'each checked category, using the checked tactics — '
+        '<b id="est-n">…</b></span></div>'
         '<div class="apecols">'
         f'{group("tactics", "tactics · the “how”", tac)}'
         f'{group("categories", "categories · the “what”", cat)}'
         '</div>'
-        "<script>document.querySelectorAll('.gtog a').forEach(function(a){"
+        "<script>(function(){"
+        "function upd(){var k=+(document.getElementById('tries')||{}).value||0,"
+        "c=document.querySelectorAll('input[name=\"categories\"]:checked').length,"
+        "t=document.querySelectorAll('input[name=\"tactics\"]:checked').length;"
+        "var ek=document.getElementById('est-k'),en=document.getElementById('est-n');"
+        "if(ek)ek.textContent=k;"
+        "if(en)en.textContent=(t&&c)?('up to '+(k*c)+' attempts · '+c+' categories × '+k+' tries')"
+        ":'select at least one tactic and category';}"
+        "document.querySelectorAll('.gtog a').forEach(function(a){"
         "a.addEventListener('click',function(){var n=a.dataset.all||a.dataset.none,"
         "on=!!a.dataset.all;document.querySelectorAll('input[name=\"'+n+'\"]')"
-        ".forEach(function(c){c.checked=on;});});});</script>"
+        ".forEach(function(c){c.checked=on;});upd();});});"
+        "document.querySelectorAll('input[name=\"categories\"],input[name=\"tactics\"]')"
+        ".forEach(function(c){c.addEventListener('change',upd);});"
+        "var ti=document.getElementById('tries');if(ti)ti.addEventListener('input',upd);"
+        "upd();})();</script>"
         '</div>'
     )
 
@@ -639,8 +652,8 @@ _PAGE = """<!doctype html><html lang="en"><head><meta charset="utf-8">
   <form class="runbar" method="post" action="/run">
     <button type="submit">▶ Run analysis</button>
     <div class="ctrl">
-      <input class="num" name="generate" type="number" value="3" min="0" max="10">
-      <span class="clab" title="How many new attack prompts the LLM crafts and screens this run (0 = corpus only)">new attacks</span>
+      <input class="num" name="generate" id="tries" type="number" value="2" min="0" max="10">
+      <span class="clab" title="How many times the red team tries to breach EACH selected category (0 = built-in corpus only)">tries / category</span>
     </div>
     {{llm}}
     {{apefilter}}

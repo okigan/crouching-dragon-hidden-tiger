@@ -34,32 +34,34 @@ def _run(args: argparse.Namespace) -> int:
     redteam = None
     if args.generate:
         from .backends.corpus import DEFAULT_CORPUS
-        from .generator import generate_attacks, taxonomy_specs
+        from .generator import generate_attacks, generate_coverage, taxonomy_specs
         gen = settings.build_generator()
-        # Optional coverage filters (empty = all): restrict the sampled pool to
-        # chosen APE tactics and/or attack categories.
+        # Coverage filters (empty = all): restrict the pool to chosen APE tactics
+        # and/or attack categories.
         tac = {t.strip() for t in args.tactics.split(",") if t.strip()}
         cat = {c.strip() for c in args.categories.split(",") if c.strip()}
-        specs = taxonomy_specs(tactics=tac or None, categories=cat or None) or None
-        if tac or cat:
-            print(f"APE coverage filter → tactics: {', '.join(sorted(tac)) or 'all'} "
-                  f"· categories: {', '.join(sorted(cat)) or 'all'} "
-                  f"({len(specs or [])} specs in pool)")
+        specs = taxonomy_specs(tactics=tac or None, categories=cat or None)
+        n_cats = len({s.category for s in specs})
+        print(f"APE coverage → tactics: {', '.join(sorted(tac)) or 'all'} · "
+              f"categories: {', '.join(sorted(cat)) or 'all'} "
+              f"({n_cats} categories × {args.generate} tries)")
         # Feed the generator prompts already known to slip past the content
         # detector (the corpus's hl_detects=False cases) so new candidates build
         # on styles that evade HiddenLayer rather than starting from scratch.
         evasions = tuple(
             c.payload for c in DEFAULT_CORPUS if not c.hl_detects
         )[:4]
-        new = generate_attacks(
-            gen, assessor.detect, args.generate, specs=specs, evasions=evasions,
+        # Give the red team `--generate` tries to breach EACH selected category.
+        new = generate_coverage(
+            gen, assessor.detect, args.generate, specs, evasions=evasions,
         )
         assessor.add_tests(new)
-        print(f"generated {len(new)}/{args.generate} evasion attack(s) "
-              f"(APE-grounded, passed screening) → added to corpus: "
+        print(f"probed {n_cats} categories × {args.generate} tries → "
+              f"{len(new)} evader(s) reached OpenShell (added to corpus): "
               f"{', '.join(c.id for c in new) or 'none'}")
 
-        # Adaptive per-round red team: regenerate from each round's survivors.
+        # Adaptive per-round red team: regenerate from each round's survivors
+        # (opportunistic escalation, seeded on what just evaded).
         if not args.no_adaptive:
             def redteam(evasions, budget, rnd,
                         _gen=gen, _det=assessor.detect, _specs=specs):
@@ -128,9 +130,10 @@ def main(argv: list[str] | None = None) -> int:
     run.add_argument("--out", default="runs/latest",
                      help="dir for traces + summary + report.html")
     run.add_argument("--save-policy", default=None, help="write hardened policy")
-    run.add_argument("--generate", type=int, default=0, metavar="N",
-                     help="dynamic red team: generate N APE-grounded attacks, "
-                          "screen them against the detector, add evaders to the corpus")
+    run.add_argument("--generate", type=int, default=0, metavar="K",
+                     help="dynamic red team: give the model K tries to breach EACH "
+                          "selected category (screen against the detector, add "
+                          "evaders to the corpus); 0 = corpus only")
     run.add_argument("--no-adaptive", action="store_true",
                      help="disable per-round red-team escalation (with --generate, "
                           "the red team re-generates from each round's survivors)")

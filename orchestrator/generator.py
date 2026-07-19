@@ -20,6 +20,7 @@ import random
 import re
 import urllib.error
 import urllib.request
+from collections import defaultdict
 from dataclasses import dataclass
 from typing import Callable, Protocol
 
@@ -230,6 +231,53 @@ class NemotronGenerator:
             return text.strip('"').strip()
         except (urllib.error.URLError, TimeoutError, OSError, KeyError, ValueError):
             return ""  # endpoint unavailable -> skip this candidate
+
+
+def generate_coverage(
+    generator: Generator,
+    detected: Callable[[str], bool],
+    tries_per_category: int,
+    specs: list[GenSpec],
+    evasions: tuple[str, ...] = (),
+    seed: int = 1234,
+    id_prefix: str = "GEN",
+) -> list[AttackCase]:
+    """Coverage generation: give the red team `tries_per_category` attempts to
+    breach EACH category present in `specs`, so every selected category is
+    actually exercised (not just widening a pool that's then sampled once).
+
+    Each attempt draws a distinct technique×objective within that category (from
+    the selected tactics) and crafts a prompt; the ones that evade the detector
+    are kept (an attempt caught by HiddenLayer = defended at the content layer,
+    so it's not banked). Total attempts ≈ tries_per_category × (#categories)."""
+    by_cat: dict[str, list[GenSpec]] = defaultdict(list)
+    for s in specs:
+        by_cat[s.category].append(s)
+    rng = random.Random(seed)
+    survivors: list[AttackCase] = []
+    n = 0
+    for cat in sorted(by_cat):
+        cat_specs = by_cat[cat][:]
+        rng.shuffle(cat_specs)
+        for attempt in range(tries_per_category):
+            spec = cat_specs[attempt % len(cat_specs)]
+            payload = generator.generate(spec, evasions).strip()
+            if not payload or looks_like_refusal(payload):
+                continue  # a wasted try — refusal or empty
+            if detected(payload):
+                continue  # HiddenLayer caught it (defended at content layer)
+            n += 1
+            survivors.append(AttackCase(
+                id=f"{id_prefix}-{n:03d}",
+                category=spec.category,
+                severity=spec.severity,
+                payload=payload,
+                requires_control=spec.requires_control,
+                hl_detects=False,
+                ape_technique=spec.technique,
+                ape_objective=spec.objective,
+            ))
+    return survivors
 
 
 def generate_attacks(
