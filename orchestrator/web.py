@@ -126,7 +126,7 @@ def _host_runs_dir(client, me_id: str) -> str | None:
 
 
 def _launch(name: str, generate: int, model: str = "",
-            tactics: str = "", categories: str = "") -> None:
+            tactics: str = "", categories: str = "", full: bool = False) -> None:
     """Run one analysis as a *visible sibling container* (cdht-<name>).
 
     The container appears in `docker ps` while the loop runs, writes its report
@@ -159,6 +159,8 @@ def _launch(name: str, generate: int, model: str = "",
             command += ["--tactics", tactics]
         if categories:
             command += ["--categories", categories]
+        if full:
+            command += ["--full-taxonomy"]
         container = client.containers.run(
             ORCH_IMAGE,
             command=command,
@@ -386,7 +388,8 @@ def _card(info: dict) -> str:
 @app.post("/run")
 def run(generate: int = Form(3), model: str = Form(""),
         tactics: list[str] = Form(default=[]),
-        categories: list[str] = Form(default=[])):
+        categories: list[str] = Form(default=[]),
+        full: str = Form(default="")):
     """Launch one analysis run as a visible sibling container (real backends).
 
     `tactics`/`categories` are the checked APE-coverage boxes; a filter is passed
@@ -403,7 +406,8 @@ def run(generate: int = Form(3), model: str = Form(""),
         name = "run-" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
         _job.update(active=True, name=name, container=None, error=None)
         threading.Thread(
-            target=_launch, args=(name, generate, model, tac_arg, cat_arg),
+            target=_launch,
+            args=(name, generate, model, tac_arg, cat_arg, bool(full)),
             daemon=True,
         ).start()
     return RedirectResponse("/", status_code=303)
@@ -467,12 +471,21 @@ def _chip(name: str, value: str, label: str) -> str:
 def _ape_filter() -> str:
     """Always-visible APE-coverage selector: tactic (how) + category (what)
     chip toggles, all checked by default, that narrow the generation pool."""
+    from collections import Counter
+
     from . import ape
-    from .generator import CATEGORIES
+    from .generator import CATEGORIES, OBJECTIVE_CATEGORY
     tac = "".join(_chip("tactics", t["id"], f'{t["id"]} · {t["name"]}')
                   for t in ape.tactics())
     cat = "".join(_chip("categories", c, c.replace("_", " "))
                   for c in CATEGORIES)
+    # spec counts per axis so the JS can size a full sweep (specs = techniques in
+    # selected tactics × objectives in selected categories).
+    _TECHS_PER_TACTIC = json.dumps(dict(Counter(
+        ape.technique_tactic(tid) for tid in ape.technique_ids())))
+    _obj_per_cat = Counter(OBJECTIVE_CATEGORY.get(oid, "content_only")
+                           for oid in ape.objective_ids())
+    _OBJS_PER_CATEGORY = json.dumps({c: _obj_per_cat.get(c, 0) for c in CATEGORIES})
 
     def group(field: str, label: str, chips: str) -> str:
         return (
@@ -488,24 +501,33 @@ def _ape_filter() -> str:
         '<div class="apehead"><b>🎯 APE coverage</b>'
         '<span class="hint">the red team gets <b id="est-k">2</b> tries to breach '
         'each checked category, using the checked tactics — '
-        '<b id="est-n">…</b></span></div>'
+        '<b id="est-n">…</b></span>'
+        '<label class="sweep"><input type="checkbox" name="full" id="full" value="1">'
+        'full taxonomy sweep <span class="hint">(every spec once — thorough but '
+        'slow with a live model)</span></label></div>'
         '<div class="apecols">'
         f'{group("tactics", "tactics · the “how”", tac)}'
         f'{group("categories", "categories · the “what”", cat)}'
         '</div>'
-        "<script>(function(){"
+        f'<script>var TPT={_TECHS_PER_TACTIC};var CATS={_OBJS_PER_CATEGORY};'
+        "(function(){"
         "function upd(){var k=+(document.getElementById('tries')||{}).value||0,"
-        "c=document.querySelectorAll('input[name=\"categories\"]:checked').length,"
-        "t=document.querySelectorAll('input[name=\"tactics\"]:checked').length;"
-        "var ek=document.getElementById('est-k'),en=document.getElementById('est-n');"
-        "if(ek)ek.textContent=k;"
-        "if(en)en.textContent=(t&&c)?('up to '+(k*c)+' attempts · '+c+' categories × '+k+' tries')"
-        ":'select at least one tactic and category';}"
+        "full=(document.getElementById('full')||{}).checked,"
+        "tsel=[].slice.call(document.querySelectorAll('input[name=\"tactics\"]:checked')).map(function(x){return x.value;}),"
+        "csel=[].slice.call(document.querySelectorAll('input[name=\"categories\"]:checked')).map(function(x){return x.value;});"
+        "var c=csel.length,t=tsel.length;"
+        "var ek=document.getElementById('est-k'),en=document.getElementById('est-n'),"
+        "ti=document.getElementById('tries');if(ek)ek.textContent=k;if(ti)ti.disabled=full;"
+        "if(!en)return;if(!t||!c){en.textContent='select at least one tactic and category';return;}"
+        "if(full){var nt=0;tsel.forEach(function(x){nt+=(TPT[x]||0);});"
+        "var no=0;csel.forEach(function(x){no+=(CATS[x]||0);});"
+        "en.textContent='full sweep — '+(nt*no)+' specs, one attempt each';}"
+        "else{en.textContent='up to '+(k*c)+' attempts · '+c+' categories × '+k+' tries';}}"
         "document.querySelectorAll('.gtog a').forEach(function(a){"
         "a.addEventListener('click',function(){var n=a.dataset.all||a.dataset.none,"
         "on=!!a.dataset.all;document.querySelectorAll('input[name=\"'+n+'\"]')"
         ".forEach(function(c){c.checked=on;});upd();});});"
-        "document.querySelectorAll('input[name=\"categories\"],input[name=\"tactics\"]')"
+        "document.querySelectorAll('input[name=\"categories\"],input[name=\"tactics\"],#full')"
         ".forEach(function(c){c.addEventListener('change',upd);});"
         "var ti=document.getElementById('tries');if(ti)ti.addEventListener('input',upd);"
         "upd();})();</script>"
@@ -615,6 +637,9 @@ _PAGE = """<!doctype html><html lang="en"><head><meta charset="utf-8">
   .apehead { display:flex; align-items:baseline; gap:10px; flex-wrap:wrap; }
   .apehead b { font-size:14px; }
   .apehead .hint { color:var(--muted); font-size:12px; }
+  .sweep { display:inline-flex; align-items:center; gap:7px; margin-left:auto;
+    font-size:12.5px; cursor:pointer; white-space:nowrap; }
+  .sweep input { width:15px; height:15px; accent-color:var(--accent); margin:0; }
   .apecols { display:grid; grid-template-columns:1fr 1fr; gap:26px 40px; margin-top:16px; }
   @media (max-width:760px) { .apecols { grid-template-columns:1fr; } }
   .apegroup { min-width:0; }
