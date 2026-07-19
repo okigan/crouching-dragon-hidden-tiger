@@ -1,5 +1,8 @@
-"""Backend resolution from environment. Defaults are all `mock`, so the platform
-runs with zero setup; real backends opt in via env (see .env.example)."""
+"""Backend resolution from environment. Defaults are the REAL backends —
+OpenShell + HiddenLayer + Nemotron — so a normal invocation exercises the live
+systems (credentials come from .env; see .env.example). Mocks are for the test
+suite only and are opted into explicitly with SANDBOX/ASSESSOR/LLM=mock (the test
+suite sets these; see tests/conftest.py)."""
 
 from __future__ import annotations
 
@@ -12,9 +15,9 @@ from .interfaces import LLM, Assessor, Sandbox
 
 @dataclass
 class Settings:
-    sandbox: str = "mock"
-    assessor: str = "mock"
-    llm: str = "mock"
+    sandbox: str = "openshell"
+    assessor: str = "hiddenlayer"
+    llm: str = "nemotron"
     enforce: bool = True  # OPENSHELL_ENFORCE ablation toggle
 
     openshell_gateway_endpoint: str | None = None
@@ -32,9 +35,9 @@ class Settings:
     def from_env(cls, env: dict[str, str] | None = None) -> "Settings":
         e = env if env is not None else os.environ
         return cls(
-            sandbox=e.get("SANDBOX", "mock"),
-            assessor=e.get("ASSESSOR", "mock"),
-            llm=e.get("LLM", "mock"),
+            sandbox=e.get("SANDBOX", "openshell"),
+            assessor=e.get("ASSESSOR", "hiddenlayer"),
+            llm=e.get("LLM", "nemotron"),
             enforce=e.get("OPENSHELL_ENFORCE", "true").lower() not in ("false", "0", "off"),
             openshell_gateway_endpoint=e.get("OPENSHELL_GATEWAY_ENDPOINT"),
             openshell_insecure=e.get("OPENSHELL_GATEWAY_INSECURE", "true").lower()

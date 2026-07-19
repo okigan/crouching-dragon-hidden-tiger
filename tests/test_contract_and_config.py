@@ -32,8 +32,14 @@ def test_real_adapters_require_credentials():
         real.NemotronLLM(None)
 
 
-def test_config_defaults_to_mock():
+def test_config_defaults_to_real():
+    # Real backends are the default; mocks are opted into only for testing.
     s = Settings.from_env(env={})
+    assert (s.sandbox, s.assessor, s.llm) == ("openshell", "hiddenlayer", "nemotron")
+
+
+def test_mock_env_selects_mocks():
+    s = Settings.from_env(env={"SANDBOX": "mock", "ASSESSOR": "mock", "LLM": "mock"})
     assert isinstance(s.build_sandbox(), mock.MockSandbox)
     assert isinstance(s.build_assessor(), mock.MockAssessor)
     assert isinstance(s.build_llm(), mock.MockLLM)

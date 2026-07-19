@@ -15,6 +15,15 @@ jobs:
       - name: Run test suite (fast, deterministic, no network)
         run: uv run pytest
       - name: Smoke-run the improvement loop on mock backends
+        # Real backends are the default; CI has no credentials, so opt into mocks.
+        env:
+          SANDBOX: mock
+          ASSESSOR: mock
+          LLM: mock
         run: uv run security-orchestrator run --out runs/ci --save-policy runs/hardened.yaml
       - name: Smoke-run the ablation harness
+        env:
+          SANDBOX: mock
+          ASSESSOR: mock
+          LLM: mock
         run: uv run security-orchestrator ablate --out runs/ci-ablation

@@ -9,6 +9,7 @@ import argparse
 import sys
 from pathlib import Path
 
+from .backends import real
 from .config import Settings
 from .harness import run_ablation
 from .loop import LoopConfig, SecurityOrchestrator
@@ -121,7 +122,16 @@ def main(argv: list[str] | None = None) -> int:
     ab.set_defaults(func=_ablate)
 
     args = p.parse_args(argv)
-    return args.func(args)
+    try:
+        return args.func(args)
+    except real.MissingCredentials as exc:
+        # Real backends are the default; a missing endpoint/key is a setup issue,
+        # not a stack trace. Point at .env (mocks are for the test suite only).
+        print(f"error: {exc}\n\n"
+              "The real backends are the default. Provide credentials in .env "
+              "(copy .env.example), or set SANDBOX/ASSESSOR/LLM=mock for an "
+              "offline run.", file=sys.stderr)
+        return 2
 
 
 if __name__ == "__main__":
