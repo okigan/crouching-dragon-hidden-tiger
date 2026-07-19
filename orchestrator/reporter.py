@@ -265,79 +265,6 @@ def _attacks_markdown(attacks: list[dict]) -> str:
     return "\n".join(lines)
 
 
-def _bypass_analysis(traces: list[dict]) -> str:
-    """One row per attack: the HiddenLayer signals and the OpenShell control,
-    which layer it bypasses, which layer stops it, and the prompt."""
-    if not traces:
-        return ""
-    base = [f for f in traces[-1]["findings"] if not f["id"].startswith("REG-")]
-    if not base:
-        return ""
-
-    # the OpenShell op that was applied to catch each finding, across all rounds
-    fix = {}
-    for t in traces:
-        rec = t.get("remediation")
-        if rec and rec.get("ops"):
-            for aid in rec.get("addresses", []):
-                fix[aid] = _op_summary(rec["ops"][0])
-
-    rows = []
-    for f in base:
-        fid = html.escape(f["id"])
-        cat = html.escape(f["category"])
-        prompt = html.escape(f.get("payload", ""))
-        hl_det = f.get("hl_detected", False)
-        os_blk = f.get("openshell_blocked", False)
-        n_sig = len(f.get("hl_signals", []))
-        sig_title = html.escape(", ".join(f.get("hl_signals", [])) or "no signals")
-
-        hl_cell = (
-            f'<span class="layer ok" title="{sig_title}">HiddenLayer: caught ({n_sig} signals)</span>'
-            if hl_det else
-            '<span class="layer gap">HiddenLayer: no signal</span>'
-        )
-        obs = (' <span class="obs" title="observed live: real curl exec\'d '
-               'inside the OpenShell sandbox">observed</span>'
-               if f.get("openshell_observed") else "")
-        os_cell = (
-            f'<span class="layer ok">OpenShell: <code>{html.escape(fix.get(f["id"], "blocked"))}</code>{obs}</span>'
-            if os_blk else f'<span class="layer gap">OpenShell: not blocked{obs}</span>'
-        )
-        if not (hl_det or os_blk):
-            verdict = '<span class="stopby landed">LANDED</span>'
-        else:
-            via = ("both layers" if hl_det and os_blk
-                   else "HiddenLayer" if hl_det else "OpenShell")
-            verdict = f'<span class="stopby defended">DEFENDED · via {via}</span>'
-        rows.append(
-            f'<li><div class="gaprow">'
-            f'<span class="gapid">{fid}</span><span class="gapcat">{cat}</span>'
-            f'{hl_cell}{os_cell}'
-            f'{verdict}</div>'
-            f'<blockquote class="prompt">{prompt}</blockquote></li>'
-        )
-
-    n_total = len(base)
-    n_landed = sum(1 for f in base
-                   if not (f.get("hl_detected") or f.get("openshell_blocked")))
-    n_defended = n_total - n_landed
-    tally = (f'<b class="tally-ok">{n_defended} defended</b>'
-             + (f' · <b class="tally-bad">{n_landed} landed</b>' if n_landed
-                else ' · <b>0 landed</b>'))
-    return (
-        '<div class="gaps"><h2>Final defense coverage — where each attack is stopped</h2>'
-        f'<div class="evo-sub">Outcome of the <b>final</b> iteration under the hardened '
-        f'policy — not a list of successful attacks. Of {n_total} attacks: {tally}. '
-        'Each row shows which of the two layers stopped that attack: HiddenLayer at the '
-        'content layer, or — when a prompt slips past content screening — OpenShell at '
-        'the capability/egress layer. An attack only <b>LANDS</b> if it evades '
-        '<i>both</i>. Full prompts in <a href="attacks.json">attacks.json</a> · '
-        '<a href="attacks.md">attacks.md</a></div>'
-        f'<ul class="gaplist">{"".join(rows)}</ul></div>'
-    )
-
-
 def _iteration_card(trace: dict) -> str:
     i = trace["iteration"]
     open_ids = trace["open"]
@@ -460,7 +387,6 @@ def _iteration_card(trace: dict) -> str:
 def _render_html(traces: list[dict], run: RunResult) -> str:
     cards = "".join(_iteration_card(t) for t in traces)
     evolution = _policy_evolution(traces)
-    gaps = _bypass_analysis(traces)
     converged = run.converged
     status_txt = "CONVERGED" if converged else "STOPPED"
     status_cls = "ok" if converged else "warn"
@@ -569,30 +495,10 @@ def _render_html(traces: list[dict], run: RunResult) -> str:
   .evo .chg {{ background:rgba(47,189,107,.12); color:#0f9d74; padding:1px 7px;
     border-radius:5px; font-size:12px; }}
   .evo .trig {{ color:var(--muted); }}
-  .gaps {{ border:1px solid #d1660f55; border-radius:12px; padding:14px 18px;
-    margin-bottom:26px; background:rgba(209,102,15,.06); }}
-  .gaps h2 {{ font-size:15px; margin:0 0 2px; }}
-  ul.gaplist {{ list-style:none; margin:0; padding:0; }}
-  ul.gaplist li {{ padding:8px 0; border-bottom:1px solid var(--line); }}
-  ul.gaplist li:last-child {{ border-bottom:0; }}
-  .gaprow {{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; font-size:13px; }}
   blockquote.prompt {{ margin:6px 0 0; padding:5px 10px; border-left:3px solid var(--line);
     color:var(--muted); font-size:12px; font-style:italic;
     background:rgba(128,128,128,.06); border-radius:0 6px 6px 0;
     overflow-wrap:anywhere; }}
-  .gapid {{ font-weight:600; min-width:64px; }}
-  .gapcat {{ color:var(--muted); }}
-  .gaparrow {{ color:#d1660f; font-weight:600; }}
-  .stopby {{ font-weight:700; margin-left:auto; font-size:11px;
-    padding:2px 8px; border-radius:20px; letter-spacing:.02em; }}
-  .stopby.defended {{ background:rgba(47,189,107,.15); color:#0f9d74; }}
-  .stopby.landed {{ background:rgba(213,48,74,.16); color:#e0576b; }}
-  .tally-ok {{ color:#0f9d74; }} .tally-bad {{ color:#e0576b; }}
-  .gaprow code {{ font-size:11px; }}
-  .bypass-col h3 {{ font-size:13px; margin:0 0 2px; }}
-  .sigcount {{ font-size:11px; font-weight:600; padding:1px 7px; border-radius:9px;
-    background:rgba(209,102,15,.15); color:#d1660f; }}
-  .sig {{ font-size:11px; color:var(--muted); }}
   .layer {{ font-size:11px; font-weight:600; padding:1px 7px; border-radius:9px; }}
   .layer.ok {{ background:rgba(47,189,107,.15); color:#0f9d74; }}
   .layer.gap {{ background:rgba(209,102,15,.15); color:#d1660f; }}
@@ -686,7 +592,6 @@ def _render_html(traces: list[dict], run: RunResult) -> str:
       </div>
     </div>
   </div>
-  {gaps}
   {evolution}
   {cards}
   <div class="attribution">
