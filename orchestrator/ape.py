@@ -52,6 +52,7 @@ def _load() -> dict:
                         "name": te.get("Technique Name", ""),
                         "description": te.get("Technique Description", ""),
                         "tactic": tactic.get("Tactic Name", ""),
+                        "tactic_id": tactic.get("Tactic ID", ""),
                         "example": _first_example(te.get("Prompts", [])),
                     }
             objectives: dict[str, dict] = {}
@@ -92,6 +93,23 @@ def objective_name(oid: str) -> str | None:
 def technique_ids() -> list[str]:
     """Every technique ID in the taxonomy, sorted (the full red-team surface)."""
     return sorted(_load()["techniques"])
+
+
+def technique_tactic(tid: str) -> str:
+    """The tactic ID a technique belongs to (e.g. 'HLT01')."""
+    t = technique(tid)
+    return t.get("tactic_id", "") if t else ""
+
+
+def tactics() -> list[dict]:
+    """Distinct tactics in the taxonomy as {id, name}, sorted by id — the 'how'
+    axis a caller can filter generation by."""
+    seen: dict[str, str] = {}
+    for t in _load()["techniques"].values():
+        tid = t.get("tactic_id", "")
+        if tid and tid not in seen:
+            seen[tid] = t.get("tactic", "")
+    return [{"id": k, "name": seen[k]} for k in sorted(seen)]
 
 
 def objective_ids() -> list[str]:

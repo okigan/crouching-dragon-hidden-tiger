@@ -34,8 +34,17 @@ def _run(args: argparse.Namespace) -> int:
     redteam = None
     if args.generate:
         from .backends.corpus import DEFAULT_CORPUS
-        from .generator import generate_attacks
+        from .generator import generate_attacks, taxonomy_specs
         gen = settings.build_generator()
+        # Optional coverage filters (empty = all): restrict the sampled pool to
+        # chosen APE tactics and/or attack categories.
+        tac = {t.strip() for t in args.tactics.split(",") if t.strip()}
+        cat = {c.strip() for c in args.categories.split(",") if c.strip()}
+        specs = taxonomy_specs(tactics=tac or None, categories=cat or None) or None
+        if tac or cat:
+            print(f"APE coverage filter → tactics: {', '.join(sorted(tac)) or 'all'} "
+                  f"· categories: {', '.join(sorted(cat)) or 'all'} "
+                  f"({len(specs or [])} specs in pool)")
         # Feed the generator prompts already known to slip past the content
         # detector (the corpus's hl_detects=False cases) so new candidates build
         # on styles that evade HiddenLayer rather than starting from scratch.
@@ -43,7 +52,7 @@ def _run(args: argparse.Namespace) -> int:
             c.payload for c in DEFAULT_CORPUS if not c.hl_detects
         )[:4]
         new = generate_attacks(
-            gen, assessor.detect, args.generate, evasions=evasions,
+            gen, assessor.detect, args.generate, specs=specs, evasions=evasions,
         )
         assessor.add_tests(new)
         print(f"generated {len(new)}/{args.generate} evasion attack(s) "
@@ -52,9 +61,10 @@ def _run(args: argparse.Namespace) -> int:
 
         # Adaptive per-round red team: regenerate from each round's survivors.
         if not args.no_adaptive:
-            def redteam(evasions, budget, rnd, _gen=gen, _det=assessor.detect):
+            def redteam(evasions, budget, rnd,
+                        _gen=gen, _det=assessor.detect, _specs=specs):
                 return generate_attacks(
-                    _gen, _det, budget, evasions=evasions,
+                    _gen, _det, budget, specs=_specs, evasions=evasions,
                     id_prefix=f"GEN-R{rnd}", seed=1234 + rnd,
                 )
 
@@ -124,6 +134,12 @@ def main(argv: list[str] | None = None) -> int:
     run.add_argument("--no-adaptive", action="store_true",
                      help="disable per-round red-team escalation (with --generate, "
                           "the red team re-generates from each round's survivors)")
+    run.add_argument("--tactics", default="",
+                     help="comma-separated APE tactic IDs to restrict generation to "
+                          "(e.g. HLT01,HLT03); empty = all tactics")
+    run.add_argument("--categories", default="",
+                     help="comma-separated attack categories to restrict generation "
+                          "to (e.g. data_exfiltration,tool_abuse); empty = all")
     enf = run.add_mutually_exclusive_group()
     enf.add_argument("--enforce", dest="enforce", action="store_true", default=None,
                      help="OpenShell enforces the policy (default)")
