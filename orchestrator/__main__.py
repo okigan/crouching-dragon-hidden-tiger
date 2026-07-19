@@ -61,10 +61,16 @@ def _run(args: argparse.Namespace) -> int:
         assessor.add_tests(new)
         reporter.set_generation_log(gen_log)
         caught = sum(1 for a in gen_log if a["outcome"] == "caught")
+        errors = sum(1 for a in gen_log if a["outcome"] == "error")
         print(f"probed {n_cats} categories × {args.generate} tries "
               f"({len(gen_log)} attempts) → {len(new)} evaded to OpenShell, "
-              f"{caught} caught by HiddenLayer: "
+              f"{caught} caught by HiddenLayer, {errors} endpoint error(s): "
               f"{', '.join(c.id for c in new) or 'none'}")
+        if errors and not new:
+            err = getattr(gen, "last_error", "") or "no model output"
+            print(f"⚠ generation produced nothing — the LLM endpoint failed: {err}. "
+                  "Switch the model in the web run bar (e.g. the self-hosted vLLM) "
+                  "or check the endpoint quota/credentials.")
 
         # Adaptive per-round red team: regenerate from each round's survivors
         # (opportunistic escalation, seeded on what just evaded).

@@ -209,6 +209,7 @@ class NemotronGenerator:
         self.api_key = api_key
         self.model = model
         self.timeout = timeout
+        self.last_error = ""  # why the most recent call returned "" (if it did)
 
     def generate(self, spec: GenSpec, evasions: tuple[str, ...] = (),
                  attempts: tuple[tuple[str, str], ...] = ()) -> str:
@@ -233,8 +234,20 @@ class NemotronGenerator:
             with urllib.request.urlopen(req, timeout=self.timeout) as resp:
                 data = json.loads(resp.read())
             text = data["choices"][0]["message"]["content"].strip()
+            if not text:
+                self.last_error = "empty model output (reasoning consumed the budget?)"
             return text.strip('"').strip()
-        except (urllib.error.URLError, TimeoutError, OSError, KeyError, ValueError):
+        except urllib.error.HTTPError as e:
+            detail = ""
+            try:
+                body = json.loads(e.read().decode())
+                detail = str(body.get("error", {}).get("message", ""))[:120]
+            except Exception:
+                pass
+            self.last_error = f"HTTP {e.code}" + (f": {detail}" if detail else "")
+            return ""  # endpoint error -> skip this candidate
+        except (urllib.error.URLError, TimeoutError, OSError, KeyError, ValueError) as e:
+            self.last_error = f"{type(e).__name__}: {e}"[:140]
             return ""  # endpoint unavailable -> skip this candidate
 
 
@@ -286,8 +299,15 @@ def generate_coverage(
         for attempt in range(tries_per_category):
             spec = cat_specs[attempt % len(cat_specs)]
             payload = generator.generate(spec, evasions, tuple(tried)).strip()
-            if not payload or looks_like_refusal(payload):
-                tried.append((payload or "(empty)", "refused"))
+            if not payload:
+                # No output at all — an endpoint error (rate limit, timeout) or
+                # an empty completion, NOT a refusal. Surface it as such.
+                err = getattr(generator, "last_error", "") or "no model output"
+                tried.append((f"(no output — {err})", "error"))
+                log(spec, f"⚠ {err}", "error")
+                continue
+            if looks_like_refusal(payload):
+                tried.append((payload, "refused"))
                 log(spec, payload, "refused")
                 continue
             if payload in seen:
