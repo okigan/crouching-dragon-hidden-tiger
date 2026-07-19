@@ -99,6 +99,26 @@ def test_coverage_dedups_identical_payloads():
     assert len(cases) == 1
 
 
+def test_full_taxonomy_sweep_attempts_every_spec_once():
+    specs = taxonomy_specs(categories={"tool_abuse", "data_exfiltration"})
+    log: list[dict] = []
+    # exhaustive: one attempt per spec, regardless of the tries argument
+    generate_coverage(_UniqueGen(), lambda p: False, 1, specs,
+                      attempts_out=log, exhaustive=True)
+    assert len(log) == len(specs)  # every technique×objective attempted exactly once
+    pairs = {(a["ape_technique"], a["ape_objective"]) for a in log}
+    assert len(pairs) == len(specs)  # and all distinct
+
+
+def test_full_sweep_of_whole_taxonomy_covers_1034_specs():
+    from orchestrator.ape import objective_ids, technique_ids
+    specs = taxonomy_specs()  # no filter = full taxonomy
+    log: list[dict] = []
+    generate_coverage(_UniqueGen(), lambda p: False, 1, specs,
+                      attempts_out=log, exhaustive=True)
+    assert len(log) == len(technique_ids()) * len(objective_ids())
+
+
 def test_coverage_labels_endpoint_errors_not_refusals():
     specs = taxonomy_specs(categories={"tool_abuse"})
 

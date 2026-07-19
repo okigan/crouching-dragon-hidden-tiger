@@ -42,29 +42,31 @@ def _run(args: argparse.Namespace) -> int:
         cat = {c.strip() for c in args.categories.split(",") if c.strip()}
         specs = taxonomy_specs(tactics=tac or None, categories=cat or None)
         n_cats = len({s.category for s in specs})
+        scope = (f"full sweep of {len(specs)} specs" if args.full_taxonomy
+                 else f"{n_cats} categories × {args.generate} tries")
         print(f"APE coverage → tactics: {', '.join(sorted(tac)) or 'all'} · "
-              f"categories: {', '.join(sorted(cat)) or 'all'} "
-              f"({n_cats} categories × {args.generate} tries)")
+              f"categories: {', '.join(sorted(cat)) or 'all'} ({scope})")
         # Feed the generator prompts already known to slip past the content
         # detector (the corpus's hl_detects=False cases) so new candidates build
         # on styles that evade HiddenLayer rather than starting from scratch.
         evasions = tuple(
             c.payload for c in DEFAULT_CORPUS if not c.hl_detects
         )[:4]
-        # Give the red team `--generate` tries to breach EACH selected category;
-        # capture the full attempt log (incl. the tries HiddenLayer stopped).
+        # Give the red team `--generate` tries to breach EACH selected category
+        # (or, with --full-taxonomy, sweep every spec once); capture the full
+        # attempt log (incl. the tries HiddenLayer stopped).
         gen_log: list[dict] = []
         new = generate_coverage(
             gen, assessor.detect, args.generate, specs, evasions=evasions,
-            attempts_out=gen_log,
+            attempts_out=gen_log, exhaustive=args.full_taxonomy,
         )
         assessor.add_tests(new)
         reporter.set_generation_log(gen_log)
         caught = sum(1 for a in gen_log if a["outcome"] == "caught")
         errors = sum(1 for a in gen_log if a["outcome"] == "error")
-        print(f"probed {n_cats} categories × {args.generate} tries "
-              f"({len(gen_log)} attempts) → {len(new)} evaded to OpenShell, "
-              f"{caught} caught by HiddenLayer, {errors} endpoint error(s): "
+        print(f"probed {scope} ({len(gen_log)} attempts) → {len(new)} evaded "
+              f"to OpenShell, {caught} caught by HiddenLayer, "
+              f"{errors} endpoint error(s): "
               f"{', '.join(c.id for c in new) or 'none'}")
         if errors and not new:
             err = getattr(gen, "last_error", "") or "no model output"
@@ -149,6 +151,10 @@ def main(argv: list[str] | None = None) -> int:
     run.add_argument("--no-adaptive", action="store_true",
                      help="disable per-round red-team escalation (with --generate, "
                           "the red team re-generates from each round's survivors)")
+    run.add_argument("--full-taxonomy", action="store_true",
+                     help="sweep EVERY technique×objective in the selected pool "
+                          "exactly once (ignores --generate count; ~1034 attempts "
+                          "for all of APE — instant with the mock, slow with an LLM)")
     run.add_argument("--tactics", default="",
                      help="comma-separated APE tactic IDs to restrict generation to "
                           "(e.g. HLT01,HLT03); empty = all tactics")

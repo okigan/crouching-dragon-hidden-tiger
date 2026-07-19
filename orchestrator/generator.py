@@ -260,15 +260,21 @@ def generate_coverage(
     seed: int = 1234,
     id_prefix: str = "GEN",
     attempts_out: list[dict] | None = None,
+    exhaustive: bool = False,
 ) -> list[AttackCase]:
     """Coverage generation: give the red team `tries_per_category` attempts to
     breach EACH category present in `specs`, so every selected category is
     actually exercised (not just widening a pool that's then sampled once).
 
+    With `exhaustive=True`, `tries_per_category` is ignored and EVERY spec in the
+    pool (each technique×objective) is attempted exactly once — a full sweep of
+    the (filtered) taxonomy. That's #specs attempts (up to 1034 for all of APE),
+    so it's slow/expensive with a real LLM but instant with the offline mock.
+
     Each attempt draws a distinct technique×objective within that category (from
     the selected tactics) and crafts a prompt; the ones that evade the detector
     are kept (an attempt caught by HiddenLayer = defended at the content layer,
-    so it's not banked). Total attempts ≈ tries_per_category × (#categories).
+    so it's not banked).
 
     If `attempts_out` is given, every attempt is appended to it (technique,
     objective, category, outcome, payload) — the full generation log, including
@@ -283,6 +289,11 @@ def generate_coverage(
     for cat in sorted(by_cat):
         cat_specs = by_cat[cat][:]
         rng.shuffle(cat_specs)
+        # Exhaustive: attempt every spec in the category once. Otherwise: K tries,
+        # cycling through the (shuffled) specs.
+        attempt_specs = (cat_specs if exhaustive else
+                         [cat_specs[i % len(cat_specs)]
+                          for i in range(tries_per_category)])
         # Per-category history fed back to the model so each try diverges from
         # the last instead of repeating: (payload, outcome) for every attempt.
         tried: list[tuple[str, str]] = []
@@ -296,9 +307,9 @@ def generate_coverage(
                     "outcome": outcome, "payload": payload,
                 })
 
-        for attempt in range(tries_per_category):
-            spec = cat_specs[attempt % len(cat_specs)]
-            payload = generator.generate(spec, evasions, tuple(tried)).strip()
+        for spec in attempt_specs:
+            # cap the history fed back so exhaustive sweeps don't balloon prompts
+            payload = generator.generate(spec, evasions, tuple(tried[-6:])).strip()
             if not payload:
                 # No output at all — an endpoint error (rate limit, timeout) or
                 # an empty completion, NOT a refusal. Surface it as such.
