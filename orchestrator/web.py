@@ -36,51 +36,82 @@ app.mount("/runs", StaticFiles(directory=str(RUNS_DIR)), name="runs")
 # Single in-flight run at a time (this is a local demo tool, not a job queue).
 _job: dict = {"active": False, "name": None, "container": None, "error": None}
 
-_models_cache: dict = {"models": None}
+_index_cache: dict = {"map": None}
 
 
 def _current_model() -> str:
     return os.environ.get("NEMOTRON_MODEL", "")
 
 
-def _llm_endpoint() -> str:
-    base = os.environ.get("NEMOTRON_BASE_URL", "")
-    return base.split("://")[-1].rstrip("/") if base else ""
+def _provider_label(url: str) -> str:
+    host = url.split("://")[-1].rstrip("/") if url else ""
+    return "OpenRouter" if "openrouter" in host else host
+
+
+def _providers() -> list[dict]:
+    """The LLM endpoints available to run against. The primary is NEMOTRON_* ;
+    additional ones come from LLM_PROVIDERS (a JSON list of
+    {base_url, key, label}) so the UI can offer, e.g., OpenRouter *and* a
+    self-hosted vLLM box at once."""
+    provs: list[dict] = []
+    base = os.environ.get("NEMOTRON_BASE_URL")
+    if base:
+        provs.append({"base_url": base, "key": os.environ.get("NEMOTRON_KEY", ""),
+                      "label": _provider_label(base)})
+    raw = os.environ.get("LLM_PROVIDERS")
+    if raw:
+        try:
+            for p in json.loads(raw):
+                if p.get("base_url"):
+                    provs.append({
+                        "base_url": p["base_url"], "key": p.get("key", ""),
+                        "label": p.get("label") or _provider_label(p["base_url"]),
+                    })
+        except Exception:
+            pass
+    return provs
+
+
+def _fetch_models(base: str, key: str) -> list[str]:
+    try:
+        import urllib.request
+        req = urllib.request.Request(
+            base.rstrip("/") + "/v1/models",
+            headers={"Authorization": f"Bearer {key}"},
+        )
+        with urllib.request.urlopen(req, timeout=5) as r:
+            data = json.load(r)
+        return [m["id"] for m in data.get("data", []) if m.get("id")]
+    except Exception:
+        return []
+
+
+def _model_index() -> dict:
+    """model id -> the provider that serves it, across all endpoints. Cached.
+    Endpoints that list hundreds of models (OpenRouter) are filtered to the
+    relevant ones (Nemotron + the configured model's vendor)."""
+    if _index_cache["map"] is not None:
+        return _index_cache["map"]
+    idx: dict = {}
+    cur = _current_model()
+    for prov in _providers():
+        ids = _fetch_models(prov["base_url"], prov["key"])
+        if len(ids) > 40:
+            vendor = cur.split("/")[0] if "/" in cur else ""
+            ids = [m for m in ids
+                   if "nemotron" in m.lower() or (vendor and m.startswith(vendor))] \
+                or ids[:40]
+        for mid in ids:
+            idx.setdefault(mid, prov)  # first provider that serves it wins
+    if cur and cur not in idx:  # always offer the configured model
+        provs = _providers()
+        idx[cur] = provs[0] if provs else {"base_url": "", "key": ""}
+    _index_cache["map"] = idx
+    return idx
 
 
 def _available_models() -> list[str]:
-    """Models the configured vLLM endpoint actually serves (GET /v1/models).
-    Cached; returns [] if the endpoint is unset or unreachable."""
-    if _models_cache["models"] is not None:
-        return _models_cache["models"]
-    models: list[str] = []
-    base = os.environ.get("NEMOTRON_BASE_URL")
-    if base:
-        try:
-            import urllib.request
-            req = urllib.request.Request(
-                base.rstrip("/") + "/v1/models",
-                headers={"Authorization": f"Bearer {os.environ.get('NEMOTRON_KEY', '')}"},
-            )
-            with urllib.request.urlopen(req, timeout=5) as r:
-                data = json.load(r)
-            models = [m["id"] for m in data.get("data", []) if m.get("id")]
-        except Exception:
-            models = []
-    # Aggregators (e.g. OpenRouter) list hundreds of models — too many for a
-    # dropdown. Keep it relevant: Nemotron models + anything sharing the
-    # configured model's vendor prefix, capped. Small lists pass through as-is.
-    cur = _current_model()
-    if len(models) > 40:
-        vendor = cur.split("/")[0] if "/" in cur else ""
-        picked = [m for m in models
-                  if "nemotron" in m.lower() or (vendor and m.startswith(vendor))]
-        models = picked or models[:40]
-    # Always include the configured model, even if listing failed / filtered out.
-    if cur and cur not in models:
-        models.insert(0, cur)
-    _models_cache["models"] = models
-    return models
+    return sorted(_model_index().keys())
 
 
 def _host_runs_dir(client, me_id: str) -> str | None:
@@ -116,6 +147,10 @@ def _launch(name: str, generate: int, model: str = "") -> None:
                if any(k.startswith(p) for p in _ENV_PREFIXES)}
         if model:  # per-run LLM override picked in the UI
             env["NEMOTRON_MODEL"] = model
+            prov = _model_index().get(model)  # route to the endpoint serving it
+            if prov and prov.get("base_url"):
+                env["NEMOTRON_BASE_URL"] = prov["base_url"]
+                env["NEMOTRON_KEY"] = prov["key"]
         container = client.containers.run(
             ORCH_IMAGE,
             command=["run", "--generate", str(generate),
@@ -329,24 +364,24 @@ def index() -> str:
 
 
 def _llm_control() -> str:
-    """The LLM selector for the run bar: a dropdown of the models the endpoint
-    serves (current one selected), or plain text if only one/none is known."""
+    """The model selector for the run bar: every model across all configured
+    endpoints (each option tagged with its provider), current one selected."""
     cur = _current_model()
-    endpoint = _llm_endpoint()
-    models = _available_models()
-    ep = f' <span class="hint">@ {html.escape(endpoint)}</span>' if endpoint else ""
-    if len(models) > 1:
-        opts = "".join(
-            f'<option value="{html.escape(m)}"{" selected" if m == cur else ""}>'
-            f'{html.escape(m)}</option>' for m in models
-        )
-        return (f'<label title="LLM used to generate attacks and reason about '
-                f'fixes">🧠 LLM <select name="model">{opts}</select></label>{ep}')
-    # single or unknown model → show it, no dropdown (still submit it)
-    shown = html.escape(cur or "default")
-    return (f'<label>🧠 LLM <input name="model" value="{html.escape(cur)}" '
-            f'class="llm-static" readonly></label>{ep}' if cur
-            else f'<span class="hint">🧠 LLM: {shown}</span>')
+    idx = _model_index()
+    models = sorted(idx.keys())
+    if not models:
+        shown = html.escape(cur or "default")
+        return ('<div class="field"><span class="flabel">🧠 model</span>'
+                f'<span class="static">{shown}</span></div>')
+    opts = []
+    for m in models:
+        prov = idx.get(m, {})
+        tag = f' · {html.escape(prov.get("label", ""))}' if prov.get("label") else ""
+        sel = " selected" if m == cur else ""
+        opts.append(f'<option value="{html.escape(m)}"{sel}>{html.escape(m)}{tag}</option>')
+    return ('<div class="field"><span class="flabel" title="LLM used to generate '
+            'attacks and reason about fixes">🧠 model</span>'
+            f'<select name="model">{"".join(opts)}</select></div>')
 
 
 @app.get("/log/{name}", response_class=PlainTextResponse)
@@ -417,16 +452,21 @@ _PAGE = """<!doctype html><html lang="en"><head><meta charset="utf-8">
   .ms { width:100%; display:block; }
   .ms.hl { background:#2fbd6b; } .ms.os { background:#3457d5; } .ms.landed { background:#d5304a; }
   .empty { color:var(--muted); } code { background:rgba(128,128,128,.15); padding:1px 5px; border-radius:5px; }
-  .runbar { display:flex; align-items:center; gap:10px; flex-wrap:wrap; background:var(--card);
-    border:1px solid var(--line); border-radius:12px; padding:12px 14px; margin-bottom:14px; }
-  .runbar button { background:var(--accent); color:#fff; border:0; border-radius:8px;
-    padding:8px 14px; font-weight:600; font-size:14px; cursor:pointer; }
-  .runbar label { color:var(--muted); font-size:13px; }
-  .runbar input, .runbar select { font:inherit; padding:5px 8px; border:1px solid var(--line);
-    border-radius:7px; background:var(--bg); color:var(--fg); }
-  .runbar input.num { width:56px; }
-  .runbar select, .runbar .llm-static { max-width:230px; }
-  .runbar .hint { color:var(--muted); font-size:12px; }
+  .runbar { display:flex; align-items:flex-end; gap:18px; flex-wrap:wrap; background:var(--card);
+    border:1px solid var(--line); border-radius:14px; padding:16px 18px; margin-bottom:16px; }
+  .runbar button { background:var(--accent); color:#fff; border:0; border-radius:9px;
+    padding:10px 18px; font-weight:600; font-size:14px; cursor:pointer; align-self:flex-end;
+    box-shadow:0 1px 3px rgba(52,87,213,.3); }
+  .runbar button:hover { filter:brightness(1.06); }
+  .field { display:flex; flex-direction:column; gap:5px; }
+  .field .flabel { color:var(--muted); font-size:11px; font-weight:600;
+    text-transform:uppercase; letter-spacing:.03em; }
+  .field input, .field select { font:inherit; padding:7px 9px; border:1px solid var(--line);
+    border-radius:8px; background:var(--bg); color:var(--fg); }
+  .field input:focus, .field select:focus { outline:none; border-color:var(--accent); }
+  .field input.num { width:64px; }
+  .field select { max-width:340px; }
+  .field .static { padding:7px 9px; color:var(--fg); font-size:13px; }
   .status { border-radius:10px; padding:9px 12px; margin-bottom:14px; font-size:13px; }
   .run-active { background:rgba(52,87,213,.12); color:var(--accent); }
   .run-error { background:rgba(179,21,59,.12); color:#e0607f; }
@@ -435,9 +475,10 @@ _PAGE = """<!doctype html><html lang="en"><head><meta charset="utf-8">
   <div class="sub">{{count}} run(s) — newest first. Click a run to open its report.</div>
   <form class="runbar" method="post" action="/run">
     <button type="submit">▶ Run analysis</button>
-    <label title="How many new attack prompts the vLLM should craft and screen this run (0 = corpus only)">
-      new AI attacks to generate
-      <input class="num" name="generate" type="number" value="3" min="0" max="10"></label>
+    <div class="field">
+      <span class="flabel" title="How many new attack prompts the LLM crafts and screens this run (0 = corpus only)">new AI attacks</span>
+      <input class="num" name="generate" type="number" value="3" min="0" max="10">
+    </div>
     {{llm}}
   </form>
   {{status}}
