@@ -59,6 +59,10 @@ class Finding:
     hl_detected: bool = False        # HiddenLayer flagged the payload (content layer)
     openshell_blocked: bool = False  # OpenShell policy denies the capability
     hl_signals: tuple[str, ...] = () # the HiddenLayer signals that fired (empty = bypass)
+    # True when openshell_blocked was OBSERVED by exec'ing the attack's egress
+    # inside the live sandbox (not inferred from the policy). See DESIGN §9.
+    openshell_observed: bool = False
+    egress_host: str = ""            # the real host the egress probe targeted
 
     def resolve(self) -> "Finding":
         return replace(self, resolved=True)
@@ -159,6 +163,11 @@ class AttackCase:
     # HiddenLayer assessor overrides this with the real API verdict; the mock and
     # the offline default use it directly.
     hl_detects: bool = True
+    # A real host this attack tries to reach to exfiltrate. When set and a live
+    # OpenShell sandbox is present, the assessor OBSERVES enforcement by exec'ing
+    # a real egress attempt to this host inside the sandbox (reachable = the
+    # attack landed; denied = OpenShell blocked it). Empty = modeled only.
+    egress_host: str = ""
     # Grounding in HiddenLayer's APE taxonomy (ape.hiddenlayer.com): which
     # adversarial-prompt technique this attack uses (how) and objective (what).
     ape_technique: str = ""  # e.g. "HLT05.13"

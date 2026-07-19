@@ -273,12 +273,21 @@ land; `RunResult.success_delta` is the round-1 → round-N drop; `orchestrator
 ablate` reports the difference — the "recursive intelligence" signal.
 
 **Honesty ledger (real vs modeled).**
-- *Real:* HiddenLayer detections (live API), the OpenShell-compatible policy
-  schema, the loop, and the metrics.
-- *Modeled:* whether an attack ultimately *lands* is computed from the defense
-  state — there is no real target agent yet; HiddenLayer's *block* action is
-  modeled by our guardrail policy (in production these map to the HiddenLayer
-  project policy's `block_*` flags); OpenShell enforcement is a stub.
+- *Real:* HiddenLayer detections (live API); the OpenShell-compatible policy
+  schema; the loop and metrics; and — for attacks that name a real `egress_host`
+  — **observed OpenShell egress enforcement**: the assessor exec's a real `curl`
+  to that host *inside the live sandbox* each round and reads the verdict back
+  (reachable = the exfil landed; HTTP 403 at OpenShell's proxy = blocked). These
+  findings carry `openshell_observed=True` and an **observed** badge in the
+  report. Verified: `example.com` reachable (HTTP 200) under the permissive
+  allow-list, then denied (403) the round after blue removes it — the verdict
+  flips from a real syscall, not an inference.
+- *Modeled:* the *non-egress* capability controls (shell/code exec, prompt
+  guard, PII redaction) are still inferred from the policy (`requires_control in
+  policy.controls()`) — OpenShell's filesystem/process enforcement is coarser and
+  not yet probed. HiddenLayer's *block* action is modeled by our guardrail policy
+  (in production these map to the project policy's `block_*` flags). There is no
+  full target agent; observation today is the egress dimension.
 
 ## 10. Reasonable pivot & roadmap
 
@@ -310,10 +319,16 @@ layer alongside OpenShell's capability layer, with the corpus as the adversary.
   hardening. Verified live: the vLLM generated 3 candidates, HiddenLayer caught 1
   and 2 evaded → added → OpenShell hardened to 0%. Offline it uses a deterministic
   mock generator so `--generate` runs anywhere.
-- **Phase E — stretch.** A real target agent so "landing" is *observed* not
-  modeled; `runtime.evaluate_interaction` over full interactions (prompt +
-  response + tool calls); and driving HiddenLayer's project block policy via the
-  API so a detection is a real block, not a modeled one.
+- **Phase E — observed enforcement (egress done).** The egress dimension is now
+  *observed*, not modeled: for attacks with a real `egress_host`, the assessor
+  exec's a live `curl` inside the OpenShell sandbox each round and uses that
+  verdict (`backends/real.py` `OpenShellSandbox.egress_probe` +
+  `HiddenLayerAssessor.set_prober`; `evaluate(..., observed=...)`). Blue's fix
+  for an exfil finding removes the whitelisted host from the egress allow-list,
+  and the next round's real probe confirms it (200 → 403). Still stretch: probing
+  the filesystem/process controls, a full target agent, `runtime
+  .evaluate_interaction` over whole interactions, and driving HiddenLayer's
+  project block policy via the API so a detection is a real block, not a modeled one.
 
 This is adapted from a coworker's `redblue-arena` plan
 ([redblue-arena/](redblue-arena/README.md)); we keep the mechanics that fit a

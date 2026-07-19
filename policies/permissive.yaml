@@ -4,7 +4,9 @@
 version: 1
 network:
   default: allow          # any egress permitted
-  allow: []
+  allow:
+    - example.com         # over-broad allow-list entry: a whitelisted exfil sink
+                          # the loop will remove (observed live: reachable -> 403)
 filesystem:
   read:
     - /
