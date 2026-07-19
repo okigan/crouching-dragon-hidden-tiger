@@ -67,8 +67,16 @@ def _available_models() -> list[str]:
             models = [m["id"] for m in data.get("data", []) if m.get("id")]
         except Exception:
             models = []
-    # Always include the configured model, even if listing failed.
+    # Aggregators (e.g. OpenRouter) list hundreds of models — too many for a
+    # dropdown. Keep it relevant: Nemotron models + anything sharing the
+    # configured model's vendor prefix, capped. Small lists pass through as-is.
     cur = _current_model()
+    if len(models) > 40:
+        vendor = cur.split("/")[0] if "/" in cur else ""
+        picked = [m for m in models
+                  if "nemotron" in m.lower() or (vendor and m.startswith(vendor))]
+        models = picked or models[:40]
+    # Always include the configured model, even if listing failed / filtered out.
     if cur and cur not in models:
         models.insert(0, cur)
     _models_cache["models"] = models
