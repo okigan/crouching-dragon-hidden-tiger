@@ -95,11 +95,11 @@ It maps onto the four-component security stack from the original brief
 | Nemotron on vLLM | Reasoning that proposes fixes (the blue team) | `LLM` |
 | Security Orchestrator | Drives the loop | built here |
 
-Each sits behind an interface with a **deterministic mock** (default, runs
-anywhere with no credentials) and a **real adapter** that swaps in via env — so
-the whole thing runs offline out of the box. The **HiddenLayer** (detection) and
-**vLLM/Nemotron** (blue team) adapters are wired against the live services;
-OpenShell is a credential-guarded seam (see the status table below).
+Each sits behind an interface with a **real adapter** (the default — a normal
+run exercises the live OpenShell + HiddenLayer + Nemotron systems, with
+credentials from `.env`) and a **deterministic mock** used **only by the test
+suite** (offline, no credentials; pinned in `tests/conftest.py`). So `pytest`
+runs anywhere, while an actual run reflects the real systems.
 
 ## Try it
 

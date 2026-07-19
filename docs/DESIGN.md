@@ -15,13 +15,17 @@ environment:
 | Nemotron on vLLM | Needs GPU + NGC access | Won't run on a laptop / CI |
 | Security Orchestrator | **We build this** | Fully ours |
 
-**Design principle: adapter seams + local mocks.** Every external component sits
-behind a narrow Python `Protocol`. Each has (a) a **mock** implementation that
-runs anywhere (deterministic, no network, used by default + in CI) and (b) a
-**real** implementation guarded behind config/credentials. The orchestrator and
-its tests never import a concrete backend directly — they resolve one from
-config. This makes the platform *reproducible* (the plan's stated objective)
-regardless of whether the gated services are present.
+**Design principle: adapter seams; real by default, mock only for tests.** Every
+external component sits behind a narrow Python `Protocol` with two
+implementations: (a) a **real** implementation (OpenShell / HiddenLayer /
+Nemotron) that is the **default** — a normal invocation exercises the live
+systems, with credentials supplied via `.env`; and (b) a **mock** implementation
+that runs anywhere (deterministic, no network) and is used **only by the test
+suite**, opted into explicitly with `SANDBOX/ASSESSOR/LLM=mock` (pinned in
+`tests/conftest.py`). The orchestrator and its tests never import a concrete
+backend directly — they resolve one from config. Defaulting to real keeps the
+platform honest (what you run is what the report reflects); the mocks keep the
+loop's convergence a fast, offline, testable property.
 
 ## 2. Component model
 
@@ -223,17 +227,19 @@ in the stack — only in `pytest`.
 
 ## 7. Config resolution (`orchestrator/config.py`)
 
-Backends chosen by env with `mock` defaults, so `git clone && pytest` works
-with zero setup. A `Settings` object is threaded through; no global state.
+Backends chosen by env, defaulting to the **real** implementations (a normal
+invocation needs `.env` credentials). The test suite pins `mock` via
+`tests/conftest.py`, so `git clone && pytest` still runs offline with zero setup.
+A `Settings` object is threaded through; no global state.
 
 ## 8. Out of scope (initial)
 
 The **HiddenLayer** (Assessor) and **Nemotron/vLLM** (LLM) adapters are fully
 implemented against the live services (`orchestrator/backends/real.py`);
 HiddenLayer's prompt analyzer supplies real detections and the adapter is
-fail-closed. **OpenShell** (Sandbox) remains a credential-guarded seam. The
-mocks prove the architecture end-to-end with zero setup; real backends swap in
-via env without touching the loop.
+fail-closed. **OpenShell** (Sandbox) is likewise real by default (the compose
+gateway). Real backends are the default; the mocks (test-only) prove the
+architecture offline without touching the loop.
 
 ## 9. Roles: attacker, defense-in-depth, and the blue reasoner
 
