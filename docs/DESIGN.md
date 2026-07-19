@@ -317,14 +317,31 @@ layer alongside OpenShell's capability layer, with the corpus as the adversary.
   link to the APE taxonomy alongside OWASP/MITRE, with CC BY-ND attribution. See
   `references.py` (`ape_refs`) and `backends/corpus.py`.
 - **Phase D — LLM red-team generator (done).** `run --generate N` makes the red
-  team dynamic: for N APE-grounded specs (`generator.py`), feed the technique
-  clause (from the vendored `ape.json` via `ape.py` / `redteam.py`) to the vLLM
-  to craft an evasion prompt, **screen** it through the detector
-  (`assessor.detect`), and add the **survivors** — prompts HiddenLayer did not
-  flag — to the corpus as `hl_detects=False` cases that force OpenShell
-  hardening. Verified live: the vLLM generated 3 candidates, HiddenLayer caught 1
-  and 2 evaded → added → OpenShell hardened to 0%. Offline it uses a deterministic
-  mock generator so `--generate` runs anywhere.
+  team dynamic. The spec pool is now the **full APE taxonomy** — every technique ×
+  every objective (`generator.taxonomy_specs()`, 47 × 22 = 1034 specs), sampled
+  reproducibly so a small N still spans many techniques. For each spec we feed the
+  technique clause **plus its worked example from `ape.json`** and the target's
+  real attack surface (`redteam.py`) to the LLM to craft an evasion prompt,
+  **screen** it through the detector (`assessor.detect`), and add the
+  **survivors** — prompts HiddenLayer did not flag — to the corpus. Model
+  **refusals are filtered** (`generator.looks_like_refusal`) so a content-free "I
+  can't help with that" is never banked as a fake evasion. Offline it uses a
+  deterministic mock generator so `--generate` runs anywhere.
+  - **Content-only objectives are honestly undefendable by OpenShell.** ~14 of the
+    22 APE objectives (hallucination, bias, system-prompt exposure, DoS, …) target
+    the *content/response* layer, not a runtime capability — OpenShell has no
+    control that stops them (`OBJECTIVE_CATEGORY` maps these to `content_only`,
+    `requires_control=""`). They defend only if HiddenLayer flags them; otherwise
+    they **land** and the loop reports **STOPPED**, not CONVERGED. The report marks
+    these OpenShell **n/a** and the outcome **content-layer** rather than a red
+    LANDED, so a residual success rate reflects "HiddenLayer's job, not OpenShell's"
+    — not an enforcement failure.
+- **Blue-team context (done).** The remediation model is shown documented OpenShell
+  controls (`remediation.CONTROL_DOCS` — what each control does, not bare keywords)
+  and the **current active policy** (`policy.controls()`), so its choice is grounded
+  rather than a blind pick. Its selection is still validated against the remediation
+  table and falls back to the deterministic heuristic, so convergence (for
+  defendable findings) never depends on the small model.
 - **Phase E — observed enforcement (egress done).** The egress dimension is now
   *observed*, not modeled: for attacks with a real `egress_host`, the assessor
   exec's a live `curl` inside the OpenShell sandbox each round and uses that

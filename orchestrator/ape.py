@@ -17,6 +17,16 @@ from functools import lru_cache
 from pathlib import Path
 
 
+def _first_example(prompts: list) -> str:
+    """The technique's first worked example prompt from the taxonomy's `Prompts`
+    field (segments joined) — the concrete exploit text a generator can learn
+    from. Empty if the technique has none."""
+    if not prompts:
+        return ""
+    segs = (prompts[0] or {}).get("prompt", [])
+    return " ".join(s.get("text", "") for s in segs if s.get("text")).strip()
+
+
 def _candidate_paths() -> list[Path]:
     env = os.environ.get("APE_JSON")
     here = Path(__file__).resolve()
@@ -42,6 +52,7 @@ def _load() -> dict:
                         "name": te.get("Technique Name", ""),
                         "description": te.get("Technique Description", ""),
                         "tactic": tactic.get("Tactic Name", ""),
+                        "example": _first_example(te.get("Prompts", [])),
                     }
             objectives: dict[str, dict] = {}
             for impact in data.get("Impacts", []):
@@ -78,7 +89,28 @@ def objective_name(oid: str) -> str | None:
     return o["name"] if o else None
 
 
-def clause_for(tid: str, max_chars: int = 600) -> str:
+def technique_ids() -> list[str]:
+    """Every technique ID in the taxonomy, sorted (the full red-team surface)."""
+    return sorted(_load()["techniques"])
+
+
+def objective_ids() -> list[str]:
+    """Every objective ID in the taxonomy, sorted."""
+    return sorted(_load()["objectives"])
+
+
+def example_prompt(tid: str) -> str:
+    """The technique's worked example attack prompt (empty if none)."""
+    t = technique(tid)
+    return t["example"] if t else ""
+
+
+def objective_description(oid: str) -> str:
+    o = objective(oid)
+    return " ".join(o["description"].split()) if o else ""
+
+
+def clause_for(tid: str, max_chars: int = 900) -> str:
     """A compact 'clause' describing an APE technique, suitable for feeding to an
     LLM red-team generator ("use this technique to craft a prompt that ...")."""
     t = technique(tid)
