@@ -200,30 +200,23 @@ def _summary(run: Path) -> dict:
         if m:
             info[label] = m.group(1).strip()
     info["when"] = _format_when(info.get("when"), run.name)
-    attacks_f = run / "attacks.json"
-    if attacks_f.exists():
-        try:
-            atk = json.loads(attacks_f.read_text())
-            info["bypass_hl"] = sum(1 for a in atk if a.get("bypassed_hiddenlayer"))
-            info["bypass_os"] = sum(1 for a in atk if a.get("bypassed_openshell"))
-            info["attacks"] = len(atk)
-        except ValueError:
-            pass
     info["has_log"] = (run / "run.log").exists()
-    info["chart"] = _mini_chart(run)
+    # Chart + final-round "caught by" counts (same framing as the report).
+    info.update(_defense_view(run))
     return info
 
 
-def _mini_chart(run: Path) -> str:
-    """A small '% defended per round' stacked chart for a run card — same
-    encoding as the report (green HiddenLayer + blue OpenShell, red landed)."""
+def _defense_view(run: Path) -> dict:
+    """From a run's traces.json: the '% defended per round' stacked chart plus
+    the final-round counts of attacks caught by HiddenLayer vs OpenShell — the
+    same defended framing the detailed report uses, so card and report agree."""
     tf = run / "traces.json"
     if not tf.exists():
-        return ""
+        return {}
     try:
         traces = json.loads(tf.read_text())
     except ValueError:
-        return ""
+        return {}
     cols = []
     for t in traces:
         fs = t.get("findings", [])
@@ -237,8 +230,15 @@ def _mini_chart(run: Path) -> str:
             f'<i class="ms os" style="height:{os_ / n * 100:.0f}%"></i>'
             f'<i class="ms hl" style="height:{hl / n * 100:.0f}%"></i></span>'
         )
-    return ('<div class="mchart" title="% defended per round — green HiddenLayer '
-            f'+ blue OpenShell, red landed">{"".join(cols)}</div>')
+    chart = ('<div class="mchart" title="% defended per round — green HiddenLayer '
+             f'+ blue OpenShell, red landed">{"".join(cols)}</div>')
+    # final-round layer attribution (exclude REG- regression duplicates)
+    final = [f for f in (traces[-1].get("findings", []) if traces else [])
+             if not f.get("id", "").startswith("REG-")]
+    caught_hl = sum(1 for f in final if f.get("hl_detected"))
+    caught_os = sum(1 for f in final
+                    if f.get("openshell_blocked") and not f.get("hl_detected"))
+    return {"chart": chart, "caught_hl": caught_hl, "caught_os": caught_os}
 
 
 def _card(info: dict) -> str:
@@ -247,23 +247,26 @@ def _card(info: dict) -> str:
     badge = "ok" if conv.lower().startswith("y") else "warn"
     badge_txt = "converged" if badge == "ok" else html.escape(conv)
 
-    # attack success: "60% → 0% (delta +60%)" → value + green delta chip
-    succ_val, delta = html.escape(info.get("success", "")), ""
-    m = re.match(r"(.+?)\s*\(delta\s*([^)]+)\)", info.get("success", ""))
+    # "attacks defended" (higher is better) — same framing as the report. Invert
+    # the recorded attack-success-rate "60% → 0% (delta +60%)" into "40% → 100%".
+    defended, delta = "", ""
+    m = re.match(r"(\d+)%\s*→\s*(\d+)%\s*\(delta\s*([^)]+)\)", info.get("success", ""))
     if m:
-        succ_val = html.escape(m.group(1).strip())
-        delta = f' <span class="delta">{html.escape(m.group(2).strip())}</span>'
+        a, b = 100 - int(m.group(1)), 100 - int(m.group(2))
+        defended = f"{a}% → {b}%"
+        delta = f' <span class="delta">{html.escape(m.group(3).strip())}</span>'
 
     stats = []
-    if succ_val:
-        stats.append(f'<div class="stat"><b>{succ_val}</b>'
-                     f'<em>attack success{delta}</em></div>')
+    if defended:
+        stats.append(f'<div class="stat"><b>{defended}</b>'
+                     f'<em>attacks defended{delta}</em></div>')
     if info.get("rounds"):
         stats.append(f'<div class="stat"><b>{html.escape(info["rounds"])}</b>'
                      f'<em>rounds</em></div>')
-    if "attacks" in info:
-        stats.append(f'<div class="stat"><b>{info.get("bypass_hl", 0)} / '
-                     f'{info.get("bypass_os", 0)}</b><em>bypass HL / OpenShell</em></div>')
+    if "caught_hl" in info:
+        stats.append(f'<div class="stat"><b>{info.get("caught_hl", 0)} / '
+                     f'{info.get("caught_os", 0)}</b>'
+                     f'<em>caught by HiddenLayer / OpenShell</em></div>')
     stats_html = f'<div class="stats">{"".join(stats)}</div>'
 
     sub_bits = []

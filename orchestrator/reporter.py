@@ -98,7 +98,7 @@ class Reporter:
             f"(delta {run.success_delta:+.0%})",
         ]
         if run.llm_model:
-            lines.append(f"- LLM: {run.llm_backend} ({run.llm_model})")
+            lines.append(f"- LLM: {run.llm_model}")
         if run.final_policy:
             lines.append(f"- Final policy version: {run.final_policy.version}")
         lines += ["", "## Iterations", ""]
@@ -457,8 +457,7 @@ def _render_html(traces: list[dict], run: RunResult) -> str:
     status_cls = "ok" if converged else "warn"
     final_v = run.final_policy.version if run.final_policy else "—"
     generated = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
-    llm_line = (f" · LLM: {run.llm_backend} ({run.llm_model})"
-                if run.llm_model else "")
+    llm_line = f" · LLM: {run.llm_model}" if run.llm_model else ""
     enforce_badge = (
         '<span class="enf on">enforcement ON</span>' if run.enforce
         else '<span class="enf off">enforcement OFF · ablation</span>'
