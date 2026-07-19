@@ -22,11 +22,18 @@ serve:
 stack-up:            ## start the daemons: OpenShell gateway + web UI (:8090)
 	docker compose up -d openshell-gateway web
 
+stack-build:         ## rebuild our image after code changes (does NOT recreate)
+	docker compose build
+
 stack-run:           ## run one loop in a container (generate -> screen -> harden)
 	docker compose run --rm orchestrator
 
 stack-web:           ## just the web UI at http://localhost:8090
 	docker compose up -d web
+
+stack-refresh:       ## rebuild image + recreate web from it (use after code edits)
+	docker compose build web
+	docker compose up -d --force-recreate web
 
 stack-ps:            ## show all stack containers (Up = daemon, Exited 0 = finished job)
 	docker compose ps -a
