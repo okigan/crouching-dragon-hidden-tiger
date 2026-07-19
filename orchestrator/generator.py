@@ -220,6 +220,7 @@ def generate_attacks(
     specs: list[GenSpec] | None = None,
     seed: int = 1234,
     evasions: tuple[str, ...] = (),
+    id_prefix: str = "GEN",
 ) -> list[AttackCase]:
     """Generate up to `count` candidates and return the ones that EVADE detection
     (the useful detection gaps). Draws from the full APE taxonomy (every technique
@@ -246,7 +247,7 @@ def generate_attacks(
             continue  # HiddenLayer caught it at the content layer — not a gap
         n += 1
         survivors.append(AttackCase(
-            id=f"GEN-{n:03d}",
+            id=f"{id_prefix}-{n:03d}",
             category=spec.category,
             severity=spec.severity,
             payload=payload,

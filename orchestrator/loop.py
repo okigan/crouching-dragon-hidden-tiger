@@ -8,10 +8,15 @@ Protocols in interfaces.py, so it runs identically over mock or real backends.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Callable
 
 from .interfaces import LLM, Assessor, Reporter, Sandbox
-from .models import IterationResult, Policy, RunResult
+from .models import AttackCase, IterationResult, Policy, RunResult
 from .policy_store import PolicyStore
+
+# An adaptive red team: given prompts that evaded a layer this round and a budget,
+# return freshly generated + screened attacks (round index scopes their ids).
+RedTeam = Callable[[tuple[str, ...], int, int], list[AttackCase]]
 
 
 @dataclass
@@ -23,6 +28,11 @@ class LoopConfig:
     # never takes effect, so exfil-success-rate stays flat. This is the control
     # that proves the policy (not Docker/the harness) is what stops the attacks.
     enforce: bool = True
+    # Adaptive red team: after each round, regenerate attacks seeded on the
+    # prompts that just evaded a layer, so the corpus escalates against the
+    # hardening policy (off when no `redteam` hook is supplied).
+    adaptive: bool = True
+    adaptive_budget: int = 2
 
 
 def _unenforced(policy: Policy) -> Policy:
@@ -44,6 +54,7 @@ class SecurityOrchestrator:
         store: PolicyStore,
         reporter: Reporter,
         config: LoopConfig | None = None,
+        redteam: RedTeam | None = None,
     ) -> None:
         self.sandbox = sandbox
         self.assessor = assessor
@@ -51,6 +62,7 @@ class SecurityOrchestrator:
         self.store = store
         self.reporter = reporter
         self.config = config or LoopConfig()
+        self.redteam = redteam
 
     def run(self) -> RunResult:
         result = RunResult(enforce=self.config.enforce)
@@ -111,6 +123,24 @@ class SecurityOrchestrator:
                           f"{ops}", flush=True)
                 if rec.new_tests:
                     self.assessor.add_tests(rec.new_tests)
+
+                # Adaptive red team: escalate against the just-hardened policy by
+                # generating fresh attacks seeded on the prompts that evaded a
+                # layer this round (landed = through OpenShell; not hl_detected =
+                # through HiddenLayer). New attacks are screened inside the hook
+                # and assessed next round.
+                if self.redteam and self.config.adaptive:
+                    evasions = tuple(dict.fromkeys(
+                        f.attack_vector for f in assessment.findings
+                        if not f.resolved or not f.hl_detected
+                    ))[:4]
+                    if evasions:
+                        fresh = self.redteam(evasions, self.config.adaptive_budget, i)
+                        if fresh:
+                            self.assessor.add_tests(fresh)
+                            print(f"[round {i}] red team escalated → +{len(fresh)} "
+                                  "new attack(s) seeded on this round's evasions: "
+                                  f"{', '.join(c.id for c in fresh)}", flush=True)
 
                 self.reporter.record_iteration(i, assessment, policy, rec)
                 result.iterations.append(

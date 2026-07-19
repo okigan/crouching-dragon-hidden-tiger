@@ -79,6 +79,26 @@ CONTROL_DOCS = "\n".join(
     for _, r in sorted(REMEDIATION.items(), key=lambda kv: kv[1]["keyword"])
 )
 
+def _ops_example(remedy: dict) -> str:
+    import json as _json
+    ops = [remedy["op"]]
+    if remedy.get("remove_egress_host"):
+        ops.append({"op": "allow_remove", "path": "network.allow",
+                    "value": "<exfil-host>"})
+    # values are strings in the wire schema (set_flag "true"/"false" is coerced)
+    for o in ops:
+        if isinstance(o.get("value"), bool):
+            o["value"] = "true" if o["value"] else "false"
+    return _json.dumps(ops)
+
+
+# The concrete policy ops that neutralize each category — shown to the model so it
+# authors the exact ops to apply (validated + convergence-checked before use).
+PATCH_OPS_GUIDE = "Policy ops that neutralize each finding category:\n" + "\n".join(
+    f"- {cat}: {_ops_example(r)}"
+    for cat, r in sorted(REMEDIATION.items())
+)
+
 # A concise, accurate primer on how OpenShell actually enforces policy, so the
 # blue-team model reasons with the right mental model. Grounded in NVIDIA's
 # OpenShell docs (architecture/security-policy.md + docs/reference/policy-schema)

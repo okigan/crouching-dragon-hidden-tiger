@@ -15,16 +15,17 @@ import time
 import urllib.error
 import urllib.request
 
-from ..models import AttackCase, Assessment, Policy, Recommendation
+from ..models import AttackCase, Assessment, Policy, PolicyPatch, Recommendation
+from ..policy_store import PolicyError, PolicyStore
 from ..references import refs_for_category, refs_from_hl_frameworks
 from .corpus import DEFAULT_CORPUS
 from .evaluate import evaluate
 from .remediation import (
     CONTROL_DOCS,
     OPENSHELL_PRIMER,
-    REMEDIATION,
-    REMEDIATION_MENU,
+    PATCH_OPS_GUIDE,
     build_recommendation,
+    control_for,
     heuristic_recommendation,
     pick_highest_severity,
 )
@@ -265,15 +266,48 @@ _SYSTEM = (
     "controls. Each control and exactly what it does at the OpenShell layer:\n"
     f"{CONTROL_DOCS}\n\n"
     f"{OPENSHELL_PRIMER}\n\n"
+    f"{PATCH_OPS_GUIDE}\n\n"
     "For the single most severe open finding, give a one-sentence root cause and "
-    "choose the one control above that neutralizes it. Note: some findings "
-    "(content-only objectives like hallucination, bias, or system-prompt "
-    "exposure) have no OpenShell control that stops them — pick the closest "
-    "control but say so in the root cause. "
-    "Respond with ONLY a JSON object: "
+    "AUTHOR the exact policy ops that neutralize it (only tightening ops: "
+    "set_default, set_flag, tool_deny, allow_remove; values are strings — use "
+    '"true"/"false" for flags). For an exfiltration finding, both deny-by-default '
+    "AND removing the target host from network.allow are required. Some findings "
+    "(content-only objectives like hallucination, bias, or system-prompt exposure) "
+    "have no OpenShell control that stops them — for those return an empty ops list "
+    "and say so in the root cause. Respond with ONLY a JSON object: "
     '{"finding_id": "<id>", "root_cause": "<one sentence>", '
-    '"remediation": "<one of the allowed keywords>"}.'
+    '"ops": [{"op": "<op>", "path": "<dotted.path>", "value": "<string>"}]}.'
 )
+
+# Structured-output schema for the remediation (OpenAI-compatible json_schema).
+_REMEDIATION_SCHEMA = {
+    "name": "remediation",
+    "strict": True,
+    "schema": {
+        "type": "object",
+        "additionalProperties": False,
+        "properties": {
+            "finding_id": {"type": "string"},
+            "root_cause": {"type": "string"},
+            "ops": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "additionalProperties": False,
+                    "properties": {
+                        "op": {"type": "string",
+                               "enum": ["set_default", "set_flag",
+                                        "tool_deny", "allow_remove"]},
+                        "path": {"type": "string"},
+                        "value": {"type": "string"},
+                    },
+                    "required": ["op", "path", "value"],
+                },
+            },
+        },
+        "required": ["finding_id", "root_cause", "ops"],
+    },
+}
 
 
 class NemotronLLM:
@@ -302,21 +336,10 @@ class NemotronLLM:
         self.timeout = timeout
 
     # --- HTTP -------------------------------------------------------------
-    def _chat(self, user: str) -> str:
-        body = json.dumps({
-            "model": self.model,
-            "messages": [
-                {"role": "system", "content": _SYSTEM},
-                {"role": "user", "content": user},
-            ],
-            "temperature": 0,
-            # Generous budget: reasoning models (e.g. Nemotron reasoning on
-            # OpenRouter) spend tokens on chain-of-thought before the answer.
-            "max_tokens": 1024,
-        }).encode()
+    def _post(self, payload: dict) -> str:
         req = urllib.request.Request(
             f"{self.base_url}/v1/chat/completions",
-            data=body,
+            data=json.dumps(payload).encode(),
             headers={
                 "Authorization": f"Bearer {self.api_key}",
                 "Content-Type": "application/json",
@@ -327,6 +350,33 @@ class NemotronLLM:
             data = json.loads(resp.read())
         return data["choices"][0]["message"]["content"]
 
+    def _chat(self, user: str, schema: dict | None = None) -> str:
+        payload = {
+            "model": self.model,
+            "messages": [
+                {"role": "system", "content": _SYSTEM},
+                {"role": "user", "content": user},
+            ],
+            "temperature": 0,
+            # Generous budget: reasoning models (e.g. Nemotron reasoning on
+            # OpenRouter) spend tokens on chain-of-thought before the answer.
+            "max_tokens": 1024,
+        }
+        if not schema:
+            return self._post(payload)
+        # Prefer strict json_schema structured output; degrade gracefully for
+        # endpoints/models that reject it (json_object, then unconstrained) so a
+        # capable model gets guaranteed structure without breaking older ones.
+        for fmt in ({"type": "json_schema", "json_schema": schema},
+                    {"type": "json_object"}, None):
+            try:
+                return self._post({**payload, "response_format": fmt} if fmt
+                                  else payload)
+            except urllib.error.HTTPError as exc:
+                if exc.code not in (400, 404, 415, 422):
+                    raise
+        return self._post(payload)
+
     # --- analyze ----------------------------------------------------------
     def analyze(self, assessment: Assessment, policy: Policy) -> Recommendation:
         target = pick_highest_severity(assessment)
@@ -336,38 +386,47 @@ class NemotronLLM:
         openf = assessment.unresolved()
         listing = "\n".join(
             f"- {f.id} [{f.category}, severity={f.severity}] {f.evidence}"
+            + (f" · exfil host: {f.egress_host}" if f.egress_host else "")
             for f in openf
         )
         active = ", ".join(sorted(policy.controls())) or "none"
         prompt = (
             f"Current OpenShell policy — controls already active: {active}.\n\n"
             f"Open findings (not yet defended):\n{listing}\n\n"
-            f"Allowed remediation keywords: {REMEDIATION_MENU}\n"
-            "Pick the single most severe finding and the control that neutralizes it."
+            "Pick the single most severe finding and author the ops that "
+            "neutralize it."
         )
 
         t0 = time.perf_counter()
         try:
-            raw = self._chat(prompt)
+            raw = self._chat(prompt, schema=_REMEDIATION_SCHEMA)
         except (urllib.error.URLError, TimeoutError, OSError, KeyError, ValueError):
             # endpoint slow/unreachable/misbehaving -> deterministic fallback
             return _tag(heuristic_recommendation(assessment), "nemotron-fallback")
         latency_ms = (time.perf_counter() - t0) * 1000.0
 
         choice = _parse(raw)
-        chosen = _validate_choice(choice, openf)
-        if chosen is None:
-            # model returned junk -> keep the model's narrative but use heuristic target
+        by_id = {f.id: f for f in openf}
+        finding = by_id.get(str((choice or {}).get("finding_id", "")).strip())
+        narrative = str((choice or {}).get("root_cause", "")).strip()
+
+        # The model authored ops directly — use them when they validate and
+        # actually neutralize the chosen finding (so convergence is preserved).
+        authored = _authored_patch(choice, finding, policy) if finding else None
+        if authored is not None:
             rec = build_recommendation(
-                target, source="nemotron-fallback",
-                narrative=(choice or {}).get("root_cause", "") if choice else "",
+                finding, source="nemotron", narrative=narrative,
                 latency_ms=latency_ms,
             )
+            rec.patch.ops = authored.ops  # the model's own policy, validated
+            rec.patch.rationale = narrative or rec.patch.rationale
             return rec
 
-        finding, narrative = chosen
+        # No usable authored ops -> deterministic remediation for the chosen (or
+        # highest-severity) finding; keep the model's narrative for the report.
         return build_recommendation(
-            finding, source="nemotron", narrative=narrative, latency_ms=latency_ms
+            finding or target, source="nemotron-fallback",
+            narrative=narrative, latency_ms=latency_ms,
         )
 
 
@@ -388,27 +447,49 @@ def _parse(raw: str) -> dict | None:
         return None
 
 
-def _norm(s: str) -> str:
-    return re.sub(r"[^a-z0-9]", "", s.lower())
+_AUTHOR_OPS = {"set_default", "set_flag", "tool_deny", "allow_remove"}
 
 
-def _validate_choice(choice: dict | None, open_findings):
-    """Return (finding, narrative) if the model picked a real open finding whose
-    remediation keyword corresponds to that finding's category. Keyword matching
-    is tolerant (the small model tends to add prefixes like "enable_"), so we
-    normalize and check containment against the expected keyword."""
-    if not choice:
+def _authored_patch(choice: dict | None, finding, policy: Policy):
+    """Turn the model's authored `ops` into a validated PolicyPatch, or None if
+    they're unusable. Accepted only when the ops are tightening, apply cleanly,
+    and actually establish the control that neutralizes `finding` (and, for an
+    exfil finding, remove its host from the allow-list) — so using the model's
+    own policy never costs the loop its convergence guarantee."""
+    raw_ops = (choice or {}).get("ops")
+    if not isinstance(raw_ops, list) or not raw_ops:
         return None
-    fid = str(choice.get("finding_id", "")).strip()
-    keyword = _norm(str(choice.get("remediation", "")))
-    narrative = str(choice.get("root_cause", "")).strip()
-    finding = {f.id: f for f in open_findings}.get(fid)
-    if finding is None:
+    ops: list[dict] = []
+    for o in raw_ops:
+        if not isinstance(o, dict):
+            return None
+        kind = str(o.get("op", "")).strip()
+        path = str(o.get("path", "")).strip()
+        if kind not in _AUTHOR_OPS or "." not in path:
+            return None
+        value: object = o.get("value")
+        if kind == "set_flag":
+            value = str(value).strip().lower() in ("true", "1", "yes", "on")
+        else:
+            value = str(value).strip()
+        ops.append({"op": kind, "path": path, "value": value})
+
+    patch = PolicyPatch(ops=ops, rationale=str((choice or {}).get("root_cause", "")),
+                        addresses=frozenset({finding.id}))
+    # tightening-only + targets a finding (rejects surface-widening ops)
+    if not patch.is_valid(policy):
         return None
-    remedy = REMEDIATION.get(finding.category)
-    if remedy is None:
+    required = control_for(finding.category)
+    if not required:
+        return None  # content-only / unknown: no control to establish here
+    trial = PolicyStore(policy)
+    try:
+        trial.apply(patch)
+    except PolicyError:
         return None
-    expected = _norm(remedy["keyword"])
-    if not keyword or (expected not in keyword and keyword not in expected):
-        return None
-    return finding, narrative
+    cur = trial.current
+    if required not in cur.controls():
+        return None  # ops don't actually neutralize the finding
+    if finding.egress_host and finding.egress_host in cur.network.get("allow", []):
+        return None  # exfil host still reachable -> observed egress would land
+    return patch

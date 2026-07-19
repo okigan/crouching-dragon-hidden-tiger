@@ -336,11 +336,16 @@ layer alongside OpenShell's capability layer, with the corpus as the adversary.
     these OpenShell **n/a** and the outcome **content-layer** rather than a red
     LANDED, so a residual success rate reflects "HiddenLayer's job, not OpenShell's"
     — not an enforcement failure.
-- **Red-team feedback (done).** The generator is also fed prompts already known to
+- **Red-team feedback (done).** The generator is fed prompts already known to
   evade the content detector (the corpus's `hl_detects=False` cases, `__main__.py`)
   as style exemplars (`redteam.generation_prompt(evasions=...)`), so new candidates
-  build on what slips past HiddenLayer instead of starting cold. (Adaptive per-round
-  regeneration from each round's actual survivors is the natural next step.)
+  build on what slips past HiddenLayer instead of starting cold.
+- **Adaptive per-round red team (done).** The loop now escalates: after each round
+  it reseeds the generator with that round's *actual* survivors — prompts that got
+  through OpenShell (landed) or through HiddenLayer (`not hl_detected`) — and adds
+  the freshly screened attacks (`GEN-R<round>-*`) to the corpus for the next round
+  (`loop.py` `redteam` hook, wired in `__main__.py`; `--no-adaptive` to disable).
+  So blue hardens against a corpus that keeps probing new gaps, not a fixed set.
 - **Blue-team context (done).** The remediation model is shown documented OpenShell
   controls (`remediation.CONTROL_DOCS` — what each control does, not bare keywords),
   an accurate **OpenShell enforcement primer** (`remediation.OPENSHELL_PRIMER`,
@@ -350,9 +355,16 @@ layer alongside OpenShell's capability layer, with the corpus as the adversary.
   docs), and the **current active policy** (`policy.controls()`), so its choice is
   grounded rather than a blind pick. Its selection is still validated against the
   remediation table and falls back to the deterministic heuristic, so convergence
-  (for defendable findings) never depends on the small model. Stretch: let the model
-  author real `network_policies` YAML (host/port/method allow-list entries) directly,
-  validated against the schema, instead of picking a templated op.
+  (for defendable findings) never depends on the small model.
+- **LLM authors the policy patch (done).** The blue-team model no longer picks a
+  templated keyword — it now **authors the exact policy ops** (`set_default`,
+  `set_flag`, `tool_deny`, `allow_remove`) via OpenAI-compatible **structured
+  output** (`response_format` json_schema, degrading to json_object then plain for
+  endpoints that reject it; `real.py` `_REMEDIATION_SCHEMA`). Authored ops are used
+  only when they validate (tightening-only) *and* actually establish the control
+  that neutralizes the finding — and, for an exfil finding, remove its host from the
+  allow-list (`_authored_patch`). Otherwise the deterministic remediation is used,
+  so the convergence guarantee holds regardless of what the model emits.
 - **Phase E — observed enforcement (egress done).** The egress dimension is now
   *observed*, not modeled: for attacks with a real `egress_host`, the assessor
   exec's a live `curl` inside the OpenShell sandbox each round and uses that
