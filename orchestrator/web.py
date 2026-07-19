@@ -318,14 +318,13 @@ def _card(info: dict) -> str:
                    f'<span class="chart-cap">% defended ↑</span></div>' if chart else "")
     return (
         f'<div class="run">'
-        f'<div class="run-main">'
+        f'<div class="run-id">'
         f'<div class="run-head"><span class="badge {badge}">{badge_txt}</span>'
         f'<a class="run-title" href="/runs/{n}/report.html">{n}</a></div>'
         f'{subline}'
-        f'{stats_html}'
         f'<div class="links"><a href="/runs/{n}/report.html">open report</a>{log_link}</div>'
         f'</div>'
-        f'{chart_block}'
+        f'<div class="run-metrics">{stats_html}{chart_block}</div>'
         f'</div>'
     )
 
@@ -420,11 +419,13 @@ _PAGE = """<!doctype html><html lang="en"><head><meta charset="utf-8">
   .wrap { max-width:1060px; margin:0 auto; padding:40px 28px 80px;
     position:relative; z-index:1; }
   h1 { font-size:24px; margin:0 0 4px; } .sub { color:var(--muted); font-size:13px; margin-bottom:28px; }
-  .run { display:flex; align-items:center; gap:36px; text-decoration:none; color:inherit;
+  .run { display:flex; align-items:center; justify-content:space-between; gap:32px;
+    flex-wrap:wrap; text-decoration:none; color:inherit;
     background:var(--card); border:1px solid var(--line); border-radius:14px;
     padding:22px 26px; margin-bottom:16px; box-shadow:0 1px 2px rgba(0,0,0,.04);
     transition:border-color .12s, box-shadow .12s; }
-  .run-main { flex:1; min-width:0; }
+  .run-id { min-width:220px; }
+  .run-metrics { display:flex; align-items:center; gap:44px; flex-wrap:wrap; }
   .run:hover { border-color:var(--accent); box-shadow:0 3px 12px rgba(52,87,213,.10); }
   .run-head { display:flex; align-items:center; gap:12px; }
   .run-title { text-decoration:none; color:inherit; font-weight:700; font-size:17px;
@@ -432,7 +433,7 @@ _PAGE = """<!doctype html><html lang="en"><head><meta charset="utf-8">
   .run-title:hover { color:var(--accent); }
   .run-sub { color:var(--muted); font-size:12px; margin-top:10px; display:flex;
     gap:18px; flex-wrap:wrap; }
-  .stats { display:flex; gap:40px; flex-wrap:wrap; margin-top:18px; }
+  .stats { display:flex; gap:36px; flex-wrap:wrap; }
   .stat { display:flex; flex-direction:column; gap:3px; }
   .stat b { font-size:17px; font-weight:700; font-variant-numeric:tabular-nums; }
   .stat em { font-style:normal; color:var(--muted); font-size:11px; }
