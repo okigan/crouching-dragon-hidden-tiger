@@ -45,6 +45,60 @@ Orange = **assessment** (the attack corpus, run and detected via HiddenLayer);
 blue = **remediation** (the blue reasoner + policy store). HiddenLayer is a
 detection layer, not the attacker — see §9.
 
+### 2.1 System overview (runtime)
+
+How the pieces actually run in the Docker stack. A run is triggered two ways —
+the **web button** (in-process background thread in `cdht-web`) or
+`make stack-run` (the ephemeral `cdht-orchestrator` job) — but both execute the
+*same* loop against the *same* real backends. Mocks exist only for the test
+suite; the deployed UI has no mock path.
+
+```mermaid
+flowchart TB
+    subgraph host["Docker stack (name: cdht)"]
+        WEB["cdht-web (:8090)<br/>FastAPI UI<br/>browse reports · POST /run"]
+        ORCH["cdht-orchestrator<br/>the improvement loop<br/>(job: make stack-run)"]
+        GW["cdht-openshell-gateway<br/>real OpenShell runtime<br/>seccomp · Landlock · netns"]
+        SBX["cdht-sandbox-* <br/>ephemeral sandbox containers"]
+        RUNS[("runs/&lt;ts&gt;/<br/>report.html · attacks.json")]
+    end
+    subgraph cloud["External services (real)"]
+        VLLM["cloud vLLM<br/>Qwen — prompt generation<br/>+ blue reasoner"]
+        HL["HiddenLayer<br/>live prompt analyzer<br/>OWASP · MITRE · APE"]
+    end
+
+    USER(["user / browser"]) -->|"click ▶ Run analysis"| WEB
+    WEB -.->|"spawn background loop"| LOOP
+    USER -->|"make stack-run"| ORCH
+    ORCH --> LOOP
+
+    subgraph LOOP["the loop (generate → screen → evaluate → harden)"]
+        direction TB
+        GEN["1 generate evasion prompts"] --> SCR["2 screen via HiddenLayer"]
+        SCR --> EVAL["3 two-layer evaluate<br/>HiddenLayer detect · OpenShell enforce"]
+        EVAL --> HARDEN["4 blue reasoner hardens<br/>OpenShell policy"]
+        HARDEN -->|"repeat until 0% land"| GEN
+    end
+
+    GEN --> VLLM
+    SCR --> HL
+    HARDEN --> VLLM
+    EVAL --> GW
+    GW --> SBX
+    LOOP --> RUNS
+    RUNS --> WEB
+
+    class SCR,HL red
+    class GEN,HARDEN,VLLM blue
+    class GW,SBX green
+    classDef red fill:#3a1418,stroke:#b3153b,color:#f0808f
+    classDef blue fill:#12233a,stroke:#3457d5,color:#8fb2ff
+    classDef green fill:#12321f,stroke:#1f7a44,color:#5fdd91
+```
+
+Orange = HiddenLayer content detection · blue = the LLM (red generation + blue
+reasoning, both on the cloud vLLM) · green = OpenShell capability enforcement.
+
 ### Interfaces (`orchestrator/interfaces.py`)
 
 - **`Sandbox`** — deploy/run the target agent under a policy.
@@ -137,13 +191,26 @@ A `PolicyPatch` is a structured diff (add/remove allow-list entries, flip a
 default, toggle a guard). `is_valid` rejects patches that widen the attack
 surface without addressing an open finding.
 
-## 5. Deployment (`docker-compose.yml`)
+## 5. Deployment (`docker-compose.yml`, project `cdht`)
 
-- `orchestrator` — always built from this repo.
-- `vllm` — profile `gpu`; OpenAI-compatible Nemotron endpoint (opt-in).
-- Mock backends need no services; the default `docker compose up orchestrator`
-  runs the full loop self-contained. Real backends enabled via `.env`
-  (`ASSESSOR=hiddenlayer`, `LLM=nemotron`, `SANDBOX=openshell`, + keys/URLs).
+Five containers, all real backends (mocks are test-only):
+
+- `cdht-openshell-jwt-init` — one-shot; generates the sandbox-JWT signing keys
+  into a **host bind mount** (`/var/lib/openshell`) so the gateway can share them
+  with the sibling sandbox containers it spawns. `Exited (0)` when done.
+- `cdht-openshell-gateway` — the real OpenShell runtime (prebuilt image); spawns
+  `cdht-sandbox-*` containers via the host Docker socket and enforces policy.
+- `cdht-orchestrator` — our loop as a **job** (`make stack-run` /
+  `docker compose run --rm orchestrator`); runs once and exits.
+- `cdht-web` — the daemon UI on `:8090`; browses reports and runs the *same* loop
+  in a background thread on `POST /run`.
+- vLLM is **cloud-hosted** (macOS can't run it locally) — there is no local vllm
+  service; the endpoint + creds come from `.env`.
+
+Backends + credentials come from `.env` (`ASSESSOR=hiddenlayer`, `LLM=nemotron`
+on the cloud endpoint, `SANDBOX=openshell`, + keys/URLs). `make stack-up` starts
+the gateway + web daemons; `make stack-run` fires one loop. Mocks are never used
+in the stack — only in `pytest`.
 
 ## 6. Testing strategy (continuous)
 
