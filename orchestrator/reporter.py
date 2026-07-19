@@ -454,12 +454,24 @@ def _generation_coverage(generation: list[dict]) -> str:
             f'<td><span class="attack-prompt">{html.escape(a.get("payload", ""))}'
             f'</span></td></tr>'
         )
+    from . import ape
+    n_tech = len({a.get("ape_technique") for a in generation if a.get("ape_technique")})
+    n_obj = len({a.get("ape_objective") for a in generation if a.get("ape_objective")})
+    n_pairs = len({(a.get("ape_technique"), a.get("ape_objective")) for a in generation})
+    total_specs = len(ape.technique_ids()) * len(ape.objective_ids())
+    coverage = (
+        f'<div class="gccov">Taxonomy coverage: this run exercised '
+        f'<b>{n_pairs}</b> of <b>{total_specs}</b> technique×objective specs '
+        f'({n_tech} techniques, {n_obj} objectives). Each try samples one spec — '
+        'raise <b>tries / category</b> in the run bar to cover more of APE.</div>'
+    )
     return (
         '<div class="gencov"><h2>Red-team generation — every try &amp; its outcome</h2>'
         f'<div class="evo-sub">The red team made <b>{total}</b> generation attempts '
         'across the selected categories. Attempts <b>caught by HiddenLayer</b> or '
         'refused never reach the corpus below — this is the full coverage, including '
         f'what the content layer already stopped.</div>'
+        f'{coverage}'
         f'<div class="gcstats">{chips}</div>{err_note}'
         '<table class="findings"><thead><tr><th>id</th><th>category</th>'
         '<th>outcome</th><th>prompt</th></tr></thead>'
@@ -626,6 +638,10 @@ def _render_html(traces: list[dict], run: RunResult,
   .gcstat.gc-err {{ background:rgba(213,48,74,.16); color:#e0576b; }}
   .gcerr {{ font-size:12px; color:#e0576b; background:rgba(213,48,74,.10);
     border-radius:8px; padding:8px 12px; margin-bottom:12px; }}
+  .gccov {{ font-size:12.5px; color:var(--muted); background:rgba(120,130,145,.10);
+    border-radius:8px; padding:9px 13px; margin:2px 0 12px;
+    font-variant-numeric:tabular-nums; }}
+  .gccov b {{ color:var(--fg); }}
   .gco {{ font-size:11px; font-weight:600; }}
   .gco-ok {{ color:#0f9d74; }} .gco-hl {{ color:#d1660f; }} .gco-muted {{ color:var(--muted); }}
   .gco-err {{ color:#e0576b; }}
