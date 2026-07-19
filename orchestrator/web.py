@@ -202,7 +202,35 @@ def _summary(run: Path) -> dict:
         except ValueError:
             pass
     info["has_log"] = (run / "run.log").exists()
+    info["chart"] = _mini_chart(run)
     return info
+
+
+def _mini_chart(run: Path) -> str:
+    """A small '% defended per round' stacked chart for a run card — same
+    encoding as the report (green HiddenLayer + blue OpenShell, red landed)."""
+    tf = run / "traces.json"
+    if not tf.exists():
+        return ""
+    try:
+        traces = json.loads(tf.read_text())
+    except ValueError:
+        return ""
+    cols = []
+    for t in traces:
+        fs = t.get("findings", [])
+        n = len(fs) or 1
+        hl = sum(1 for f in fs if f.get("hl_detected"))
+        os_ = sum(1 for f in fs if f.get("openshell_blocked") and not f.get("hl_detected"))
+        landed = sum(1 for f in fs if not f.get("resolved"))
+        cols.append(
+            f'<span class="mcol">'
+            f'<i class="ms landed" style="height:{landed / n * 100:.0f}%"></i>'
+            f'<i class="ms os" style="height:{os_ / n * 100:.0f}%"></i>'
+            f'<i class="ms hl" style="height:{hl / n * 100:.0f}%"></i></span>'
+        )
+    return ('<div class="mchart" title="% defended per round — green HiddenLayer '
+            f'+ blue OpenShell, red landed">{"".join(cols)}</div>')
 
 
 def _card(info: dict) -> str:
@@ -229,11 +257,14 @@ def _card(info: dict) -> str:
                if sub_bits else "")
     return (
         f'<div class="run">'
+        f'<div class="run-main">'
         f'<div class="run-head"><span class="badge {badge}">{html.escape(conv)}</span>'
         f'<a class="run-title" href="/runs/{n}/report.html"><b>{n}</b></a></div>'
         f'{subline}'
         f'<div class="meta">{meta}</div>'
         f'<div class="links"><a href="/runs/{n}/report.html">report</a>{log_link}</div>'
+        f'</div>'
+        f'{info.get("chart", "")}'
         f'</div>'
     )
 
@@ -313,13 +344,30 @@ _PAGE = """<!doctype html><html lang="en"><head><meta charset="utf-8">
 <style>
   :root { --bg:#f6f8fa; --fg:#1b1f24; --muted:#5b6570; --card:#fff; --line:#e2e6ea; --accent:#3457d5; }
   @media (prefers-color-scheme: dark) { :root { --bg:#0f1216; --fg:#e6edf3; --muted:#9aa5b1; --card:#171b21; --line:#272d35; --accent:#6f8bff; } }
-  * { box-sizing:border-box; } body { margin:0; background:var(--bg); color:var(--fg);
+  * { box-sizing:border-box; } html, body { overflow-x:hidden; }
+  body { margin:0; background:var(--bg); color:var(--fg);
     font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; }
-  .wrap { max-width:820px; margin:0 auto; padding:28px 18px 60px; }
+  /* Faint dragon (left) + tiger (right) backdrop — the namesake, kept subtle. */
+  body::before, body::after { content:""; position:fixed; top:50%;
+    transform:translateY(-50%); font-size:44vh; line-height:1; z-index:0;
+    opacity:.05; pointer-events:none; user-select:none; }
+  body::before { content:"🐉"; left:-.12em; }
+  body::after { content:"🐅"; right:-.12em; }
+  @media (max-width:900px) { body::before, body::after { display:none; } }
+  .wrap { max-width:820px; margin:0 auto; padding:28px 18px 60px;
+    position:relative; z-index:1; }
   h1 { font-size:22px; margin:0 0 2px; } .sub { color:var(--muted); font-size:13px; margin-bottom:22px; }
-  .run { display:block; text-decoration:none; color:inherit; background:var(--card);
-    border:1px solid var(--line); border-radius:12px; padding:14px 16px; margin-bottom:12px; }
+  .run { display:flex; align-items:center; gap:16px; text-decoration:none; color:inherit;
+    background:var(--card); border:1px solid var(--line); border-radius:12px;
+    padding:14px 16px; margin-bottom:12px; }
+  .run-main { flex:1; min-width:0; }
   .run:hover { border-color:var(--accent); }
+  .mchart { display:flex; align-items:flex-end; gap:3px; height:42px; flex:none; }
+  .mcol { width:10px; height:100%; display:flex; flex-direction:column;
+    justify-content:flex-end; border-radius:2px; overflow:hidden;
+    background:rgba(128,128,128,.12); }
+  .ms { width:100%; display:block; }
+  .ms.hl { background:#2fbd6b; } .ms.os { background:#3457d5; } .ms.landed { background:#d5304a; }
   .run-title { text-decoration:none; color:inherit; }
   .run-title:hover { color:var(--accent); }
   .links { margin-top:8px; font-size:12px; display:flex; gap:2px; }
