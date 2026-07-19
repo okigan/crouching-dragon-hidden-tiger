@@ -302,22 +302,26 @@ def _bypass_analysis(traces: list[dict]) -> str:
             f'<span class="layer ok">OpenShell: <code>{html.escape(fix.get(f["id"], "blocked"))}</code>{obs}</span>'
             if os_blk else f'<span class="layer gap">OpenShell: bypassed{obs}</span>'
         )
-        stopped = ("OpenShell" if os_blk and not hl_det
-                   else "HiddenLayer" if hl_det and not os_blk
-                   else "both" if hl_det and os_blk else "nothing — LANDED")
+        if not (hl_det or os_blk):
+            verdict = '<span class="stopby landed">LANDED</span>'
+        else:
+            via = ("both layers" if hl_det and os_blk
+                   else "HiddenLayer" if hl_det else "OpenShell")
+            verdict = f'<span class="stopby defended">DEFENDED · via {via}</span>'
         rows.append(
             f'<li><div class="gaprow">'
             f'<span class="gapid">{fid}</span><span class="gapcat">{cat}</span>'
             f'{hl_cell}{os_cell}'
-            f'<span class="stopby">→ stopped by {stopped}</span></div>'
+            f'{verdict}</div>'
             f'<blockquote class="prompt">{prompt}</blockquote></li>'
         )
 
     return (
-        '<div class="gaps"><h2>Bypass analysis — which layer stops each attack</h2>'
-        '<div class="evo-sub">for each prompt: the HiddenLayer signals, the '
-        'OpenShell control, and which layer it bypasses. Full prompts also in '
-        '<a href="attacks.json">attacks.json</a> · '
+        '<div class="gaps"><h2>Defense coverage — which layer stops each attack</h2>'
+        '<div class="evo-sub">final outcome under the hardened policy. Each prompt '
+        'that evades HiddenLayer (0 signals) is caught by OpenShell instead — once '
+        'converged, every attack is <b>DEFENDED</b> (nothing landed). Full prompts '
+        'in <a href="attacks.json">attacks.json</a> · '
         '<a href="attacks.md">attacks.md</a></div>'
         f'<ul class="gaplist">{"".join(rows)}</ul></div>'
     )
@@ -529,7 +533,7 @@ def _render_html(traces: list[dict], run: RunResult) -> str:
   .seg {{ width:100%; }}
   .seg.hl {{ background:#2fbd6b; }}
   .seg.os {{ background:var(--accent); }}
-  .seg.landed {{ background:rgba(179,21,59,.28); }}
+  .seg.landed {{ background:#d5304a; }}
   .scol-x {{ position:absolute; bottom:-16px; left:0; right:0; text-align:center;
     font-size:9px; color:var(--muted); }}
   .legend {{ display:flex; align-items:center; gap:10px; margin-top:14px;
@@ -538,7 +542,7 @@ def _render_html(traces: list[dict], run: RunResult) -> str:
   .legend .sw {{ width:9px; height:9px; border-radius:2px; display:inline-block; }}
   .legend .sw.hl {{ background:#2fbd6b; }}
   .legend .sw.os {{ background:var(--accent); }}
-  .legend .sw.landed {{ background:rgba(179,21,59,.28); }}
+  .legend .sw.landed {{ background:#d5304a; }}
   .legend .cap {{ margin-left:auto; font-weight:600; }}
   .evolution {{ border:1px solid var(--line); border-radius:12px; padding:14px 18px;
     margin-bottom:26px; background:var(--card); }}
@@ -567,7 +571,10 @@ def _render_html(traces: list[dict], run: RunResult) -> str:
   .gapid {{ font-weight:600; min-width:64px; }}
   .gapcat {{ color:var(--muted); }}
   .gaparrow {{ color:#d1660f; font-weight:600; }}
-  .stopby {{ font-weight:600; margin-left:auto; }}
+  .stopby {{ font-weight:700; margin-left:auto; font-size:11px;
+    padding:2px 8px; border-radius:20px; letter-spacing:.02em; }}
+  .stopby.defended {{ background:rgba(47,189,107,.15); color:#2fbd6b; }}
+  .stopby.landed {{ background:rgba(213,48,74,.16); color:#d5304a; }}
   .gaprow code {{ font-size:11px; }}
   .bypass-col h3 {{ font-size:13px; margin:0 0 2px; }}
   .sigcount {{ font-size:11px; font-weight:600; padding:1px 7px; border-radius:9px;

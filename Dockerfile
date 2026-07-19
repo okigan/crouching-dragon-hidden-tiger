@@ -1,6 +1,10 @@
 # Orchestrator image: our code + the openshell CLI + the HiddenLayer SDK.
 FROM python:3.12-slim
 
+# Unbuffered stdout/stderr so a run's progress streams to `docker logs` live
+# (otherwise Python buffers until exit and the container looks log-less mid-run).
+ENV PYTHONUNBUFFERED=1
+
 WORKDIR /app
 
 # curl for health checks; openssh-client because the openshell CLI relays into

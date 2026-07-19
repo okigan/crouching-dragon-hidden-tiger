@@ -58,6 +58,8 @@ class SecurityOrchestrator:
 
         for i in range(self.config.max_iters):
             policy: Policy = self.store.current
+            print(f"[round {i}] deploying agent under policy v{policy.version} "
+                  f"(OpenShell sandbox)…", flush=True)
             handle = self.sandbox.deploy(self.config.agent, policy)
             try:
                 # The sandbox (OpenShell) is the sole guard: when enforcement is
@@ -67,9 +69,16 @@ class SecurityOrchestrator:
                 assessment = self.assessor.assess(handle, effective)
                 result.success_rates.append(assessment.success_rate())
                 open_before = assessment.open_ids()
+                total = len(assessment.findings)
+                landed = len(assessment.unresolved())
+                print(f"[round {i}] assessed {total} attacks · {landed} landed "
+                      f"({assessment.success_rate():.0%}) · "
+                      f"{total - landed} defended", flush=True)
 
                 # Convergence: nothing left to fix.
                 if not open_before:
+                    print(f"[round {i}] converged — all attacks defended ✓",
+                          flush=True)
                     self.reporter.record_iteration(i, assessment, policy)
                     result.iterations.append(
                         IterationResult(i, open_before, open_before, None,
@@ -95,6 +104,11 @@ class SecurityOrchestrator:
                 if not rec.patch.is_empty() and rec.patch.is_valid(policy):
                     self.store.apply(rec.patch)
                     applied = rec.patch
+                    ops = ", ".join(f"{o.get('op')} {o.get('path','')}"
+                                    f"{('=' + str(o['value'])) if 'value' in o else ''}"
+                                    for o in applied.ops)
+                    print(f"[round {i}] hardening → policy v{self.store.current.version}: "
+                          f"{ops}", flush=True)
                 if rec.new_tests:
                     self.assessor.add_tests(rec.new_tests)
 
