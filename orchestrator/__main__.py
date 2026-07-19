@@ -51,13 +51,19 @@ def _run(args: argparse.Namespace) -> int:
         evasions = tuple(
             c.payload for c in DEFAULT_CORPUS if not c.hl_detects
         )[:4]
-        # Give the red team `--generate` tries to breach EACH selected category.
+        # Give the red team `--generate` tries to breach EACH selected category;
+        # capture the full attempt log (incl. the tries HiddenLayer stopped).
+        gen_log: list[dict] = []
         new = generate_coverage(
             gen, assessor.detect, args.generate, specs, evasions=evasions,
+            attempts_out=gen_log,
         )
         assessor.add_tests(new)
-        print(f"probed {n_cats} categories × {args.generate} tries → "
-              f"{len(new)} evader(s) reached OpenShell (added to corpus): "
+        reporter.set_generation_log(gen_log)
+        caught = sum(1 for a in gen_log if a["outcome"] == "caught")
+        print(f"probed {n_cats} categories × {args.generate} tries "
+              f"({len(gen_log)} attempts) → {len(new)} evaded to OpenShell, "
+              f"{caught} caught by HiddenLayer: "
               f"{', '.join(c.id for c in new) or 'none'}")
 
         # Adaptive per-round red team: regenerate from each round's survivors

@@ -246,6 +246,7 @@ def generate_coverage(
     evasions: tuple[str, ...] = (),
     seed: int = 1234,
     id_prefix: str = "GEN",
+    attempts_out: list[dict] | None = None,
 ) -> list[AttackCase]:
     """Coverage generation: give the red team `tries_per_category` attempts to
     breach EACH category present in `specs`, so every selected category is
@@ -254,7 +255,11 @@ def generate_coverage(
     Each attempt draws a distinct technique×objective within that category (from
     the selected tactics) and crafts a prompt; the ones that evade the detector
     are kept (an attempt caught by HiddenLayer = defended at the content layer,
-    so it's not banked). Total attempts ≈ tries_per_category × (#categories)."""
+    so it's not banked). Total attempts ≈ tries_per_category × (#categories).
+
+    If `attempts_out` is given, every attempt is appended to it (technique,
+    objective, category, outcome, payload) — the full generation log, including
+    the tries the content layer stopped, so callers can show real coverage."""
     by_cat: dict[str, list[GenSpec]] = defaultdict(list)
     for s in specs:
         by_cat[s.category].append(s)
@@ -268,23 +273,38 @@ def generate_coverage(
         # Per-category history fed back to the model so each try diverges from
         # the last instead of repeating: (payload, outcome) for every attempt.
         tried: list[tuple[str, str]] = []
+
+        def log(spec: GenSpec, payload: str, outcome: str, aid: str = "") -> None:
+            if attempts_out is not None:
+                attempts_out.append({
+                    "id": aid, "category": spec.category,
+                    "ape_technique": spec.technique,
+                    "ape_objective": spec.objective,
+                    "outcome": outcome, "payload": payload,
+                })
+
         for attempt in range(tries_per_category):
             spec = cat_specs[attempt % len(cat_specs)]
             payload = generator.generate(spec, evasions, tuple(tried)).strip()
             if not payload or looks_like_refusal(payload):
                 tried.append((payload or "(empty)", "refused"))
+                log(spec, payload, "refused")
                 continue
             if payload in seen:
                 tried.append((payload, "duplicate — already tried"))
+                log(spec, payload, "duplicate")
                 continue
             if detected(payload):
                 tried.append((payload, "CAUGHT by detector"))
+                log(spec, payload, "caught")
                 continue
             tried.append((payload, "evaded — reached OpenShell"))
             seen.add(payload)
             n += 1
+            aid = f"{id_prefix}-{n:03d}"
+            log(spec, payload, "evaded", aid)
             survivors.append(AttackCase(
-                id=f"{id_prefix}-{n:03d}",
+                id=aid,
                 category=spec.category,
                 severity=spec.severity,
                 payload=payload,

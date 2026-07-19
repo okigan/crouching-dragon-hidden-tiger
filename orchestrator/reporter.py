@@ -30,9 +30,15 @@ _SEV_COLOR = {
 class Reporter:
     def __init__(self, run_dir: str | Path | None = None) -> None:
         self._traces: list[dict] = []
+        self._generation: list[dict] = []
         self.run_dir = Path(run_dir) if run_dir else None
         if self.run_dir:
             self.run_dir.mkdir(parents=True, exist_ok=True)
+
+    def set_generation_log(self, attempts: list[dict]) -> None:
+        """Record the red team's full generation attempt log (every try + outcome,
+        including the ones the content layer stopped) for the report."""
+        self._generation = attempts or []
 
     def record_iteration(
         self,
@@ -122,11 +128,14 @@ class Reporter:
             attacks = _attacks_export(self._traces)
             (self.run_dir / "attacks.json").write_text(json.dumps(attacks, indent=2))
             (self.run_dir / "attacks.md").write_text(_attacks_markdown(attacks))
+            if self._generation:
+                (self.run_dir / "generation.json").write_text(
+                    json.dumps(self._generation, indent=2))
         return report
 
     # --- HTML dashboard ---------------------------------------------------
     def render_html(self, run: RunResult) -> str:
-        return _render_html(self._traces, run)
+        return _render_html(self._traces, run, self._generation)
 
 
 def _badge(severity: str) -> str:
@@ -403,9 +412,60 @@ def _iteration_card(trace: dict) -> str:
     </section>"""
 
 
-def _render_html(traces: list[dict], run: RunResult) -> str:
+_GEN_OUTCOME = {
+    "evaded": ("evaded → tested on OpenShell", "ok"),
+    "caught": ("caught by HiddenLayer (content layer)", "hl"),
+    "refused": ("model refused", "muted"),
+    "duplicate": ("duplicate of an earlier try", "muted"),
+}
+
+
+def _generation_coverage(generation: list[dict]) -> str:
+    """Panel showing the FULL red-team generation log — every try and its
+    outcome, including the ones HiddenLayer stopped at screening (which never
+    reach the corpus/iterations, so they'd otherwise be invisible)."""
+    if not generation:
+        return ""
+    from collections import Counter
+    tally = Counter(a.get("outcome", "") for a in generation)
+    total = len(generation)
+    chips = "".join(
+        f'<span class="gcstat gc-{cls}">{tally.get(k, 0)} {html.escape(lbl)}</span>'
+        for k, (lbl, cls) in _GEN_OUTCOME.items() if tally.get(k)
+    )
+    rows = []
+    for a in generation:
+        lbl, cls = _GEN_OUTCOME.get(a.get("outcome", ""),
+                                    (a.get("outcome", "?"), "muted"))
+        tech, obj = a.get("ape_technique", ""), a.get("ape_objective", "")
+        aid = a.get("id") or "—"
+        rows.append(
+            f'<tr><td>{html.escape(aid)}</td>'
+            f'<td>{html.escape(a.get("category", ""))}'
+            f'<span class="apetag">{html.escape(tech)}'
+            f'{" · " + html.escape(obj) if obj else ""}</span></td>'
+            f'<td><span class="gco gco-{cls}">{html.escape(lbl)}</span></td>'
+            f'<td><span class="attack-prompt">{html.escape(a.get("payload", ""))}'
+            f'</span></td></tr>'
+        )
+    return (
+        '<div class="gencov"><h2>Red-team generation — every try &amp; its outcome</h2>'
+        f'<div class="evo-sub">The red team made <b>{total}</b> generation attempts '
+        'across the selected categories. Attempts <b>caught by HiddenLayer</b> or '
+        'refused never reach the corpus below — this is the full coverage, including '
+        f'what the content layer already stopped.</div>'
+        f'<div class="gcstats">{chips}</div>'
+        '<table class="findings"><thead><tr><th>id</th><th>category</th>'
+        '<th>outcome</th><th>prompt</th></tr></thead>'
+        f'<tbody>{"".join(rows)}</tbody></table></div>'
+    )
+
+
+def _render_html(traces: list[dict], run: RunResult,
+                 generation: list[dict] | None = None) -> str:
     cards = "".join(_iteration_card(t) for t in traces)
     evolution = _policy_evolution(traces)
+    gencov = _generation_coverage(generation or [])
     converged = run.converged
     status_txt = "CONVERGED" if converged else "STOPPED"
     status_cls = "ok" if converged else "warn"
@@ -550,6 +610,15 @@ def _render_html(traces: list[dict], run: RunResult) -> str:
   .attack-prompt {{ color:var(--muted); font-size:12px; font-style:italic;
     overflow-wrap:anywhere; }}
   .attack-prompt::before {{ content:"↳ prompt: "; font-style:normal; opacity:.7; }}
+  .gencov {{ margin-bottom:26px; }}
+  .gencov h2 {{ font-size:15px; margin:0 0 2px; }}
+  .gcstats {{ display:flex; gap:8px; flex-wrap:wrap; margin:12px 0 14px; }}
+  .gcstat {{ font-size:11px; font-weight:600; padding:3px 9px; border-radius:20px;
+    background:rgba(120,130,145,.12); color:var(--muted); }}
+  .gcstat.gc-ok {{ background:rgba(47,189,107,.15); color:#0f9d74; }}
+  .gcstat.gc-hl {{ background:rgba(209,102,15,.15); color:#d1660f; }}
+  .gco {{ font-size:11px; font-weight:600; }}
+  .gco-ok {{ color:#0f9d74; }} .gco-hl {{ color:#d1660f; }} .gco-muted {{ color:var(--muted); }}
   .apetag {{ display:inline-block; margin-left:7px; font-size:10px; font-weight:600;
     color:var(--muted); background:rgba(120,130,145,.12); padding:1px 6px;
     border-radius:5px; font-variant-numeric:tabular-nums; letter-spacing:.02em; }}
@@ -616,6 +685,7 @@ def _render_html(traces: list[dict], run: RunResult) -> str:
       </div>
     </div>
   </div>
+  {gencov}
   {evolution}
   {cards}
   <div class="attribution">
