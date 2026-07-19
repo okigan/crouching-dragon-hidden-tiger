@@ -20,7 +20,7 @@ import random
 import re
 import urllib.error
 import urllib.request
-from collections import defaultdict
+from collections import Counter, defaultdict
 from dataclasses import dataclass
 from typing import Callable, Protocol
 
@@ -292,6 +292,25 @@ def generate_coverage(
     survivors: list[AttackCase] = []
     seen: set[str] = set()
     n = 0
+    # Live progress: generation is the slow part (one LLM call per attempt), so
+    # stream a running tally to stdout — otherwise a 1034-spec sweep looks hung.
+    total = (sum(len(v) for v in by_cat.values()) if exhaustive
+             else tries_per_category * len(by_cat))
+    tally: Counter = Counter()
+    done = 0
+
+    def tick(outcome: str) -> None:
+        nonlocal done
+        done += 1
+        tally[outcome] += 1
+        if done % 20 == 0 or done == total:
+            print(f"[gen] {done}/{total} attempts · {tally['evaded']} evaded · "
+                  f"{tally['caught']} caught · {tally['refused']} refused · "
+                  f"{tally['error']} err", flush=True)
+
+    if total:
+        print(f"[gen] generating up to {total} attack(s) across {len(by_cat)} "
+              f"categor{'y' if len(by_cat) == 1 else 'ies'}…", flush=True)
     for cat in sorted(by_cat):
         cat_specs = by_cat[cat][:]
         rng.shuffle(cat_specs)
@@ -322,24 +341,29 @@ def generate_coverage(
                 err = getattr(generator, "last_error", "") or "no model output"
                 tried.append((f"(no output — {err})", "error"))
                 log(spec, f"⚠ {err}", "error")
+                tick("error")
                 continue
             if looks_like_refusal(payload):
                 tried.append((payload, "refused"))
                 log(spec, payload, "refused")
+                tick("refused")
                 continue
             if payload in seen:
                 tried.append((payload, "duplicate — already tried"))
                 log(spec, payload, "duplicate")
+                tick("duplicate")
                 continue
             if detected(payload):
                 tried.append((payload, "CAUGHT by detector"))
                 log(spec, payload, "caught")
+                tick("caught")
                 continue
             tried.append((payload, "evaded — reached OpenShell"))
             seen.add(payload)
             n += 1
             aid = f"{id_prefix}-{n:03d}"
             log(spec, payload, "evaded", aid)
+            tick("evaded")
             survivors.append(AttackCase(
                 id=aid,
                 category=spec.category,

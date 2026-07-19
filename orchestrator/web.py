@@ -221,8 +221,9 @@ def _live_progress() -> str:
         return ""
     lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
     for ln in reversed(lines):  # newest meaningful step first
-        if (ln.startswith("[round") or ln.startswith("generated")
-                or "converged" in ln or "visual report" in ln):
+        if (ln.startswith("[round") or ln.startswith("[gen]")
+                or ln.startswith("generated") or "converged" in ln
+                or "visual report" in ln):
             return ln
     return lines[-1] if lines else ""
 

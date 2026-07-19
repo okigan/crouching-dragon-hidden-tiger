@@ -111,6 +111,15 @@ def test_mock_generator_varies_payload_per_spec():
     assert len(payloads) == len(specs)
 
 
+def test_coverage_streams_progress(capsys):
+    specs = taxonomy_specs(categories={"tool_abuse", "data_exfiltration"})
+    generate_coverage(_UniqueGen(), lambda p: False, 15, specs)
+    out = capsys.readouterr().out
+    assert "[gen] generating up to 30 attack(s)" in out   # 2 cats × 15 tries
+    assert "[gen] 20/30 attempts" in out                  # periodic progress
+    assert "[gen] 30/30 attempts" in out                  # final tick
+
+
 def test_full_taxonomy_sweep_attempts_every_spec_once():
     specs = taxonomy_specs(categories={"tool_abuse", "data_exfiltration"})
     log: list[dict] = []
