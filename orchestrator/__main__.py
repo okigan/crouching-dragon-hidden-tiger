@@ -31,9 +31,11 @@ def _run(args: argparse.Namespace) -> int:
 
     # Dynamic red team: generate candidate attacks from APE techniques, screen
     # them against the detector, and add the evaders to the corpus.
+    redteam = None
     if args.generate:
         from .backends.corpus import DEFAULT_CORPUS
         from .generator import generate_attacks
+        gen = settings.build_generator()
         # Feed the generator prompts already known to slip past the content
         # detector (the corpus's hl_detects=False cases) so new candidates build
         # on styles that evade HiddenLayer rather than starting from scratch.
@@ -41,13 +43,20 @@ def _run(args: argparse.Namespace) -> int:
             c.payload for c in DEFAULT_CORPUS if not c.hl_detects
         )[:4]
         new = generate_attacks(
-            settings.build_generator(), assessor.detect, args.generate,
-            evasions=evasions,
+            gen, assessor.detect, args.generate, evasions=evasions,
         )
         assessor.add_tests(new)
         print(f"generated {len(new)}/{args.generate} evasion attack(s) "
               f"(APE-grounded, passed screening) → added to corpus: "
               f"{', '.join(c.id for c in new) or 'none'}")
+
+        # Adaptive per-round red team: regenerate from each round's survivors.
+        if not args.no_adaptive:
+            def redteam(evasions, budget, rnd, _gen=gen, _det=assessor.detect):
+                return generate_attacks(
+                    _gen, _det, budget, evasions=evasions,
+                    id_prefix=f"GEN-R{rnd}", seed=1234 + rnd,
+                )
 
     orch = SecurityOrchestrator(
         sandbox=sandbox,
@@ -56,6 +65,7 @@ def _run(args: argparse.Namespace) -> int:
         store=store,
         reporter=reporter,
         config=LoopConfig(agent=args.agent, max_iters=args.max_iters, enforce=enforce),
+        redteam=redteam,
     )
     result = orch.run()
     result.llm_backend = settings.llm
@@ -111,6 +121,9 @@ def main(argv: list[str] | None = None) -> int:
     run.add_argument("--generate", type=int, default=0, metavar="N",
                      help="dynamic red team: generate N APE-grounded attacks, "
                           "screen them against the detector, add evaders to the corpus")
+    run.add_argument("--no-adaptive", action="store_true",
+                     help="disable per-round red-team escalation (with --generate, "
+                          "the red team re-generates from each round's survivors)")
     enf = run.add_mutually_exclusive_group()
     enf.add_argument("--enforce", dest="enforce", action="store_true", default=None,
                      help="OpenShell enforces the policy (default)")
