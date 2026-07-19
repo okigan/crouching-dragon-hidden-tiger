@@ -20,6 +20,7 @@ from ..references import refs_for_category, refs_from_hl_frameworks
 from .corpus import DEFAULT_CORPUS
 from .evaluate import evaluate
 from .remediation import (
+    CONTROL_DOCS,
     REMEDIATION,
     REMEDIATION_MENU,
     build_recommendation,
@@ -258,9 +259,15 @@ class HiddenLayerAssessor:
 
 
 _SYSTEM = (
-    "You are a security analyst hardening an AI agent's runtime policy. "
+    "You are a security analyst hardening an AI agent's runtime policy enforced by "
+    "OpenShell — a capability/egress sandbox. You harden by enabling OpenShell "
+    "controls. Each control and exactly what it does at the OpenShell layer:\n"
+    f"{CONTROL_DOCS}\n"
     "For the single most severe open finding, give a one-sentence root cause and "
-    "choose exactly one remediation from the allowed list. "
+    "choose the one control above that neutralizes it. Note: some findings "
+    "(content-only objectives like hallucination, bias, or system-prompt "
+    "exposure) have no OpenShell control that stops them — pick the closest "
+    "control but say so in the root cause. "
     "Respond with ONLY a JSON object: "
     '{"finding_id": "<id>", "root_cause": "<one sentence>", '
     '"remediation": "<one of the allowed keywords>"}.'
@@ -329,10 +336,12 @@ class NemotronLLM:
             f"- {f.id} [{f.category}, severity={f.severity}] {f.evidence}"
             for f in openf
         )
+        active = ", ".join(sorted(policy.controls())) or "none"
         prompt = (
-            f"Open findings:\n{listing}\n\n"
+            f"Current OpenShell policy — controls already active: {active}.\n\n"
+            f"Open findings (not yet defended):\n{listing}\n\n"
             f"Allowed remediation keywords: {REMEDIATION_MENU}\n"
-            "Pick the most severe finding and its remediation."
+            "Pick the single most severe finding and the control that neutralizes it."
         )
 
         t0 = time.perf_counter()

@@ -285,11 +285,23 @@ def _iteration_card(trace: dict) -> str:
         )
         obs = (' <span class="obs" title="observed live inside the OpenShell '
                'sandbox">obs</span>' if f.get("openshell_observed") else "")
-        os_cell = (
-            f'<span class="layer ok">blocked{obs}</span>' if os_blocked
-            else f'<span class="layer gap">open{obs}</span>'
-        )
-        if not f["resolved"]:
+        # content-only objectives (hallucination, bias, system-prompt exposure)
+        # have no OpenShell runtime control — HiddenLayer is the only layer that
+        # can defend them, so OpenShell is honestly N/A rather than "bypassed".
+        content_only = f.get("category") == "content_only"
+        if content_only:
+            os_cell = ('<span class="layer na" title="no OpenShell runtime '
+                       'control for this content-layer objective">n/a</span>')
+        else:
+            os_cell = (
+                f'<span class="layer ok">blocked{obs}</span>' if os_blocked
+                else f'<span class="layer gap">open{obs}</span>'
+            )
+        if not f["resolved"] and content_only:
+            outcome = ('<span class="state contentgap" title="content-layer '
+                       'attack HiddenLayer did not flag; OpenShell cannot enforce '
+                       'it">content-layer</span>')
+        elif not f["resolved"]:
             outcome = '<span class="state landed">LANDED</span>'
         elif hl_detected and not os_blocked:
             outcome = '<span class="state hlonly">HiddenLayer</span>'
@@ -505,6 +517,8 @@ def _render_html(traces: list[dict], run: RunResult) -> str:
   .obs {{ font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:.04em;
     padding:0 4px; border-radius:5px; background:var(--accent); color:#fff; vertical-align:middle; }}
   .state.landed {{ color:#b3153b; }}
+  .state.contentgap {{ color:#8a6d3b; }}
+  .layer.na {{ background:rgba(120,130,145,.14); color:var(--muted); }}
   .state.hlonly {{ color:#0f9d74; }}
   .state.osonly {{ color:var(--accent); }}
   .evo .hl {{ margin-left:auto; font-size:11px; font-weight:600; padding:1px 8px;
