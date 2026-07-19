@@ -293,16 +293,16 @@ def _bypass_analysis(traces: list[dict]) -> str:
         sig_title = html.escape(", ".join(f.get("hl_signals", [])) or "no signals")
 
         hl_cell = (
-            f'<span class="layer ok" title="{sig_title}">HiddenLayer: {n_sig} signals</span>'
+            f'<span class="layer ok" title="{sig_title}">HiddenLayer: caught ({n_sig} signals)</span>'
             if hl_det else
-            '<span class="layer gap">HiddenLayer: bypassed (0 signals)</span>'
+            '<span class="layer gap">HiddenLayer: no signal</span>'
         )
         obs = (' <span class="obs" title="observed live: real curl exec\'d '
                'inside the OpenShell sandbox">observed</span>'
                if f.get("openshell_observed") else "")
         os_cell = (
             f'<span class="layer ok">OpenShell: <code>{html.escape(fix.get(f["id"], "blocked"))}</code>{obs}</span>'
-            if os_blk else f'<span class="layer gap">OpenShell: bypassed{obs}</span>'
+            if os_blk else f'<span class="layer gap">OpenShell: not blocked{obs}</span>'
         )
         if not (hl_det or os_blk):
             verdict = '<span class="stopby landed">LANDED</span>'
@@ -318,12 +318,21 @@ def _bypass_analysis(traces: list[dict]) -> str:
             f'<blockquote class="prompt">{prompt}</blockquote></li>'
         )
 
+    n_total = len(base)
+    n_landed = sum(1 for f in base
+                   if not (f.get("hl_detected") or f.get("openshell_blocked")))
+    n_defended = n_total - n_landed
+    tally = (f'<b class="tally-ok">{n_defended} defended</b>'
+             + (f' · <b class="tally-bad">{n_landed} landed</b>' if n_landed
+                else ' · <b>0 landed</b>'))
     return (
-        '<div class="gaps"><h2>Defense coverage — which layer stops each attack</h2>'
-        '<div class="evo-sub">final outcome under the hardened policy. Each prompt '
-        'that evades HiddenLayer (0 signals) is caught by OpenShell instead — once '
-        'converged, every attack is <b>DEFENDED</b> (nothing landed). Full prompts '
-        'in <a href="attacks.json">attacks.json</a> · '
+        '<div class="gaps"><h2>Final defense coverage — where each attack is stopped</h2>'
+        f'<div class="evo-sub">Outcome of the <b>final</b> iteration under the hardened '
+        f'policy — not a list of successful attacks. Of {n_total} attacks: {tally}. '
+        'Each row shows which of the two layers stopped that attack: HiddenLayer at the '
+        'content layer, or — when a prompt slips past content screening — OpenShell at '
+        'the capability/egress layer. An attack only <b>LANDS</b> if it evades '
+        '<i>both</i>. Full prompts in <a href="attacks.json">attacks.json</a> · '
         '<a href="attacks.md">attacks.md</a></div>'
         f'<ul class="gaplist">{"".join(rows)}</ul></div>'
     )
@@ -578,6 +587,7 @@ def _render_html(traces: list[dict], run: RunResult) -> str:
     padding:2px 8px; border-radius:20px; letter-spacing:.02em; }}
   .stopby.defended {{ background:rgba(47,189,107,.15); color:#0f9d74; }}
   .stopby.landed {{ background:rgba(213,48,74,.16); color:#e0576b; }}
+  .tally-ok {{ color:#0f9d74; }} .tally-bad {{ color:#e0576b; }}
   .gaprow code {{ font-size:11px; }}
   .bypass-col h3 {{ font-size:13px; margin:0 0 2px; }}
   .sigcount {{ font-size:11px; font-weight:600; padding:1px 7px; border-radius:9px;
