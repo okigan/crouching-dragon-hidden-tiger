@@ -48,8 +48,14 @@ def to_openshell(policy: Policy, curl_path: str = "/usr/bin/curl") -> dict:
                 "binaries": [{"path": curl_path}],
             }
 
-    read_only = sorted(set(_DEFAULT_READ_ONLY) | set(policy.filesystem.get("read", [])))
-    read_write = sorted(set(_DEFAULT_READ_WRITE) | set(policy.filesystem.get("write", [])))
+    # OpenShell rejects "/" as a filesystem rule ("path is overly broad") — its
+    # schema can't express "read/write everything". A permissive policy that asks
+    # for "/" is clamped to the broadest set OpenShell accepts (the defaults +
+    # any concrete subpaths); real enforcement here is on the network dimension.
+    read = [p for p in policy.filesystem.get("read", []) if p != "/"]
+    write = [p for p in policy.filesystem.get("write", []) if p != "/"]
+    read_only = sorted(set(_DEFAULT_READ_ONLY) | set(read))
+    read_write = sorted(set(_DEFAULT_READ_WRITE) | set(write))
 
     return {
         "version": 1,

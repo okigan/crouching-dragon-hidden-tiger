@@ -32,3 +32,12 @@ def test_extra_filesystem_paths_merge():
     p = Policy(filesystem={"read": ["/data"], "write": ["/out"]})
     fs = to_openshell(p)["filesystem_policy"]
     assert "/data" in fs["read_only"] and "/out" in fs["read_write"]
+
+
+def test_root_path_clamped():
+    # OpenShell rejects "/" as overly broad; the translation must drop it so a
+    # permissive ("/") policy still yields an acceptable live `policy set`.
+    p = Policy(filesystem={"read": ["/"], "write": ["/"]})
+    fs = to_openshell(p)["filesystem_policy"]
+    assert "/" not in fs["read_only"] and "/" not in fs["read_write"]
+    assert "/app" in fs["read_only"] and "/sandbox" in fs["read_write"]

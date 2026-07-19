@@ -70,8 +70,11 @@ class OpenShellSandbox:
         from .openshell_policy import to_openshell_yaml
 
         name = f"cdht-sandbox-{uuid.uuid4().hex[:8]}"
+        # Non-interactive: without a command, `create` defaults to an interactive
+        # shell and blocks on a relay/TTY that doesn't exist headless. Run `true`
+        # (sandbox is kept since we don't pass --no-keep), then set policy + exec.
         r = self._cli("sandbox", "create", "--name", name, "--no-auto-providers",
-                      timeout=self.create_timeout)
+                      "--no-tty", "--", "true", timeout=self.create_timeout)
         if r.returncode != 0:
             raise RuntimeError(f"openshell sandbox create failed: {r.stderr.strip()}")
         with tempfile.NamedTemporaryFile("w", suffix=".yaml", delete=False) as f:

@@ -3,7 +3,10 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-RUN apt-get update && apt-get install -y --no-install-recommends curl \
+# curl for health checks; openssh-client because the openshell CLI relays into
+# a sandbox over ssh (ProxyCommand back through the gateway) — without it,
+# `openshell sandbox create` fails at "Waiting for supervisor relay".
+RUN apt-get update && apt-get install -y --no-install-recommends curl openssh-client \
     && rm -rf /var/lib/apt/lists/*
 
 # Deps first for layer caching.
